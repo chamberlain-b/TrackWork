@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 @main
@@ -6,5 +7,13 @@ struct TrackWorkApp: App {
         WindowGroup {
             AppRouter()
         }
+        .modelContainer(for: [
+            AttendanceDay.self,
+            LeaveRecord.self,
+            ManualAdjustment.self,
+            ComplianceRule.self,
+            Place.self,
+            PublicHoliday.self
+        ])
     }
 }
