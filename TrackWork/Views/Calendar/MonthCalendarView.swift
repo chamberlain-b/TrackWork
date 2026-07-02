@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MonthCalendarView: View {
     @Query(sort: \AttendanceDay.date) private var attendanceDays: [AttendanceDay]
+    @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
     @State private var displayedMonth = Date.now
 
     private let calendar = Calendar.workTrackCalendar
@@ -23,10 +24,17 @@ struct MonthCalendarView: View {
         let attendanceByDay = Dictionary(grouping: attendanceDays) { attendanceDay in
             calendar.startOfDay(for: attendanceDay.date)
         }
+        let leaveByDay = Dictionary(grouping: leaveRecords) { leaveRecord in
+            calendar.startOfDay(for: leaveRecord.date)
+        }
 
-        let blankDays = (0..<leadingBlanks).map { _ in CalendarDay(date: nil, attendanceDay: nil) }
+        let blankDays = (0..<leadingBlanks).map { _ in CalendarDay(date: nil, attendanceDay: nil, leaveRecord: nil) }
         let populatedDays = monthDates.map { date in
-            CalendarDay(date: date, attendanceDay: attendanceByDay[date]?.first)
+            CalendarDay(
+                date: date,
+                attendanceDay: attendanceByDay[date]?.first,
+                leaveRecord: leaveByDay[date]?.first
+            )
         }
 
         return blankDays + populatedDays
@@ -98,9 +106,18 @@ struct MonthCalendarView: View {
             ForEach(calendarDays) { day in
                 if let date = day.date {
                     NavigationLink {
-                        DayDetailView(date: date, attendanceDay: day.attendanceDay)
+                        DayDetailView(
+                            date: date,
+                            attendanceDay: day.attendanceDay,
+                            leaveRecord: day.leaveRecord
+                        )
                     } label: {
-                        DayCell(date: date, attendanceDay: day.attendanceDay, calendar: calendar)
+                        DayCell(
+                            date: date,
+                            attendanceDay: day.attendanceDay,
+                            leaveRecord: day.leaveRecord,
+                            calendar: calendar
+                        )
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -124,11 +141,13 @@ private struct CalendarDay: Identifiable {
     let id = UUID()
     let date: Date?
     let attendanceDay: AttendanceDay?
+    let leaveRecord: LeaveRecord?
 }
 
 private struct DayCell: View {
     let date: Date
     let attendanceDay: AttendanceDay?
+    let leaveRecord: LeaveRecord?
     let calendar: Calendar
 
     private var dayNumber: Int {
@@ -139,6 +158,26 @@ private struct DayCell: View {
         attendanceDay?.finalClassification ?? .unknown
     }
 
+    private var leaveType: LeaveType? {
+        leaveRecord?.leaveType ?? status.leaveType
+    }
+
+    private var badgeText: String {
+        leaveType?.calendarBadgeText ?? status.calendarBadgeText
+    }
+
+    private var badgeBackgroundColor: Color {
+        leaveType == nil ? status.calendarBadgeBackgroundColor : Color.ds.leaveDay.opacity(0.18)
+    }
+
+    private var badgeForegroundColor: Color {
+        leaveType == nil ? status.calendarBadgeForegroundColor : Color.ds.leaveDay
+    }
+
+    private var accessibilityStatus: String {
+        leaveType?.displayName ?? status.displayName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
             Text(dayNumber, format: .number)
@@ -147,13 +186,13 @@ private struct DayCell: View {
 
             Spacer(minLength: 0)
 
-            Text(status.calendarBadgeText)
+            Text(badgeText)
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(status.calendarBadgeForegroundColor)
+                .foregroundStyle(badgeForegroundColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, minHeight: 22)
-                .background(status.calendarBadgeBackgroundColor)
+                .background(badgeBackgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous))
         }
         .padding(AppSpacing.xs)
@@ -165,7 +204,7 @@ private struct DayCell: View {
                 .stroke(Color.ds.borderSubtle, lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide))), \(status.displayName)")
+        .accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide))), \(accessibilityStatus)")
     }
 }
 
@@ -174,11 +213,15 @@ private struct DayDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ManualAdjustment.updatedAt, order: .reverse) private var manualAdjustments: [ManualAdjustment]
     @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
+    @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
+    @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
     let date: Date
     let attendanceDay: AttendanceDay?
+    let leaveRecord: LeaveRecord?
 
     @State private var selectedStatus: AttendanceClassification
+    @State private var selectedLeave: LeaveSelection
     @State private var selectedReason: OverrideReason
     @State private var note: String
     @State private var saveError: String?
@@ -189,19 +232,24 @@ private struct DayDetailView: View {
         .office,
         .home,
         .mixed,
-        .annualLeave,
-        .sickLeave,
         .unknown
     ]
 
-    init(date: Date, attendanceDay: AttendanceDay?) {
+    init(date: Date, attendanceDay: AttendanceDay?, leaveRecord: LeaveRecord?) {
         self.date = date
         self.attendanceDay = attendanceDay
+        self.leaveRecord = leaveRecord
 
-        let initialStatus = attendanceDay?.manualClassification ?? attendanceDay?.finalClassification ?? .unknown
-        let initialNote = attendanceDay?.note ?? ""
+        let initialFinalStatus = attendanceDay?.manualClassification ?? attendanceDay?.finalClassification ?? .unknown
+        let detectedStatus = attendanceDay?.detectedClassification ?? .unknown
+        let initialStatus = Self.editableStatuses.contains(initialFinalStatus)
+            ? initialFinalStatus
+            : Self.editableStatuses.contains(detectedStatus) ? detectedStatus : .unknown
+        let initialLeaveType = leaveRecord?.leaveType ?? initialFinalStatus.leaveType
+        let initialNote = attendanceDay?.note ?? leaveRecord?.note ?? ""
 
         _selectedStatus = State(initialValue: initialStatus)
+        _selectedLeave = State(initialValue: LeaveSelection(leaveType: initialLeaveType))
         _selectedReason = State(initialValue: .manualCorrection)
         _note = State(initialValue: initialNote)
     }
@@ -211,11 +259,11 @@ private struct DayDetailView: View {
     }
 
     private var finalStatus: AttendanceClassification {
-        selectedStatus
+        selectedLeave.leaveType?.classification ?? selectedStatus
     }
 
     private var requiresOverrideReason: Bool {
-        finalStatus != detectedStatus
+        selectedLeave == .none && finalStatus != detectedStatus
     }
 
     private var existingManualAdjustment: ManualAdjustment? {
@@ -226,6 +274,50 @@ private struct DayDetailView: View {
         return manualAdjustments.first { adjustment in
             adjustment.attendanceDayId == attendanceDay.id
         }
+    }
+
+    private var existingLeaveRecord: LeaveRecord? {
+        leaveRecords.first { leaveRecord in
+            calendar.isDate(leaveRecord.date, inSameDayAs: date)
+        } ?? leaveRecord
+    }
+
+    private var selectedISOWeekdays: Set<Int> {
+        Set(complianceRules.first?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
+    }
+
+    private var isPublicHoliday: Bool {
+        publicHolidays.contains { publicHoliday in
+            calendar.isDate(publicHoliday.date, inSameDayAs: date)
+        }
+    }
+
+    private var isSelectedWorkday: Bool {
+        selectedISOWeekdays.contains(calendar.isoWeekday(for: date))
+    }
+
+    private var leaveReducesEligibleDay: Bool {
+        selectedLeave.leaveType != nil && isSelectedWorkday && !isPublicHoliday
+    }
+
+    private var eligibleDayImpactText: String {
+        leaveReducesEligibleDay ? "1.0 day" : "0.0 days"
+    }
+
+    private var eligibleDayImpactReason: String {
+        if selectedLeave.leaveType == nil {
+            return "No leave recorded."
+        }
+
+        if isPublicHoliday {
+            return "Public holidays are already excluded."
+        }
+
+        if !isSelectedWorkday {
+            return "Non-workdays are not eligible compliance days."
+        }
+
+        return "Full-day leave excludes this eligible workday."
     }
 
     var body: some View {
@@ -244,6 +336,25 @@ private struct DayDetailView: View {
                 }
             }
 
+            Section("Leave") {
+                Picker("Full-day leave", selection: $selectedLeave) {
+                    ForEach(LeaveSelection.allCases) { selection in
+                        Text(selection.displayName)
+                            .tag(selection)
+                    }
+                }
+
+                if selectedLeave.leaveType != nil {
+                    LabeledContent("Duration", value: LeaveDuration.fullDay.displayName)
+                }
+
+                LabeledContent("Eligible day impact", value: eligibleDayImpactText)
+
+                Text(eligibleDayImpactReason)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
+            }
+
             Section("Manual status") {
                 Picker("Final status", selection: $selectedStatus) {
                     ForEach(Self.editableStatuses) { status in
@@ -251,6 +362,7 @@ private struct DayDetailView: View {
                             .tag(status)
                     }
                 }
+                .disabled(selectedLeave.leaveType != nil)
 
                 if requiresOverrideReason {
                     Picker("Override reason", selection: $selectedReason) {
@@ -306,7 +418,8 @@ private struct DayDetailView: View {
             modelContext.insert(day)
         }
 
-        day.applyManualEdit(finalClassification: selectedStatus, note: note)
+        day.applyManualEdit(finalClassification: finalStatus, note: note)
+        day.complianceTreatmentRaw = complianceTreatment(for: finalStatus).rawValue
         upsertManualAdjustment(for: day)
         syncLeaveRecord()
 
@@ -320,6 +433,13 @@ private struct DayDetailView: View {
 
     private func upsertManualAdjustment(for day: AttendanceDay) {
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard selectedLeave == .none else {
+            if let existingAdjustment = manualAdjustments.first(where: { $0.attendanceDayId == day.id }) {
+                modelContext.delete(existingAdjustment)
+            }
+            return
+        }
 
         guard selectedStatus != (day.detectedClassification ?? .unknown) else {
             if let existingAdjustment = manualAdjustments.first(where: { $0.attendanceDayId == day.id }) {
@@ -346,12 +466,9 @@ private struct DayDetailView: View {
 
     private func syncLeaveRecord() {
         let dayStart = calendar.startOfDay(for: date)
-        let existingLeaveRecord = leaveRecords.first { leaveRecord in
-            calendar.isDate(leaveRecord.date, inSameDayAs: dayStart)
-        }
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let selectedLeaveType = selectedStatus.leaveType else {
+        guard let selectedLeaveType = selectedLeave.leaveType else {
             if let existingLeaveRecord {
                 modelContext.delete(existingLeaveRecord)
             }
@@ -371,6 +488,80 @@ private struct DayDetailView: View {
                 note: trimmedNote.isEmpty ? nil : trimmedNote
             )
             modelContext.insert(leaveRecord)
+        }
+    }
+
+    private func complianceTreatment(for status: AttendanceClassification) -> ComplianceTreatment {
+        switch status {
+        case .office:
+            .countsAsOffice
+        case .home, .mixed:
+            .countsAsHome
+        case .annualLeave, .sickLeave, .publicHoliday, .weekend, .nonWorkingDay:
+            .excludedFromRequirement
+        case .unknown:
+            .requiresReview
+        }
+    }
+}
+
+private enum LeaveSelection: String, CaseIterable, Identifiable {
+    case none
+    case annualLeave
+    case sickLeave
+
+    var id: String { rawValue }
+
+    init(leaveType: LeaveType?) {
+        switch leaveType {
+        case .annualLeave:
+            self = .annualLeave
+        case .sickLeave:
+            self = .sickLeave
+        case nil:
+            self = .none
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .none:
+            "None"
+        case .annualLeave:
+            LeaveType.annualLeave.displayName
+        case .sickLeave:
+            LeaveType.sickLeave.displayName
+        }
+    }
+
+    var leaveType: LeaveType? {
+        switch self {
+        case .none:
+            nil
+        case .annualLeave:
+            .annualLeave
+        case .sickLeave:
+            .sickLeave
+        }
+    }
+}
+
+private extension LeaveType {
+    var classification: AttendanceClassification {
+        switch self {
+        case .annualLeave:
+            .annualLeave
+        case .sickLeave:
+            .sickLeave
+        }
+    }
+
+    var calendarBadgeText: String {
+        switch self {
+        case .annualLeave:
+            "AL"
+        case .sickLeave:
+            "SL"
         }
     }
 }
@@ -469,6 +660,11 @@ private extension Calendar {
     func mondayBasedWeekdayIndex(for date: Date) -> Int {
         let weekday = component(.weekday, from: date)
         return (weekday + 5) % 7
+    }
+
+    func isoWeekday(for date: Date) -> Int {
+        let weekday = component(.weekday, from: date)
+        return weekday == 1 ? 7 : weekday - 1
     }
 }
 
