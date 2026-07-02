@@ -170,19 +170,70 @@ private struct DayCell: View {
 }
 
 private struct DayDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ManualAdjustment.updatedAt, order: .reverse) private var manualAdjustments: [ManualAdjustment]
+    @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
+
     let date: Date
     let attendanceDay: AttendanceDay?
 
-    private var status: AttendanceClassification {
-        attendanceDay?.finalClassification ?? .unknown
+    @State private var selectedStatus: AttendanceClassification
+    @State private var selectedReason: OverrideReason
+    @State private var note: String
+    @State private var saveError: String?
+
+    private let calendar = Calendar.workTrackCalendar
+
+    private static let editableStatuses: [AttendanceClassification] = [
+        .office,
+        .home,
+        .mixed,
+        .annualLeave,
+        .sickLeave,
+        .unknown
+    ]
+
+    init(date: Date, attendanceDay: AttendanceDay?) {
+        self.date = date
+        self.attendanceDay = attendanceDay
+
+        let initialStatus = attendanceDay?.manualClassification ?? attendanceDay?.finalClassification ?? .unknown
+        let initialNote = attendanceDay?.note ?? ""
+
+        _selectedStatus = State(initialValue: initialStatus)
+        _selectedReason = State(initialValue: .manualCorrection)
+        _note = State(initialValue: initialNote)
+    }
+
+    private var detectedStatus: AttendanceClassification {
+        attendanceDay?.detectedClassification ?? .unknown
+    }
+
+    private var finalStatus: AttendanceClassification {
+        selectedStatus
+    }
+
+    private var requiresOverrideReason: Bool {
+        finalStatus != detectedStatus
+    }
+
+    private var existingManualAdjustment: ManualAdjustment? {
+        guard let attendanceDay else {
+            return nil
+        }
+
+        return manualAdjustments.first { adjustment in
+            adjustment.attendanceDayId == attendanceDay.id
+        }
     }
 
     var body: some View {
-        List {
+        Form {
             Section("Day") {
                 LabeledContent("Date", value: date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()))
-                LabeledContent("Final status", value: status.displayName)
-                LabeledContent("Detected status", value: attendanceDay?.detectedClassification?.displayName ?? AttendanceClassification.unknown.displayName)
+                LabeledContent("Detected status", value: detectedStatus.displayName)
+                LabeledContent("Final status", value: finalStatus.displayName)
             }
 
             if let attendanceDay {
@@ -191,25 +242,151 @@ private struct DayDetailView: View {
                     LabeledContent("Home minutes", value: attendanceDay.homeMinutes.formatted())
                     LabeledContent("Compliance", value: attendanceDay.complianceTreatment?.displayName ?? ComplianceTreatment.requiresReview.displayName)
                 }
+            }
 
-                if let note = attendanceDay.note, !note.isEmpty {
-                    Section("Note") {
-                        Text(note)
+            Section("Manual status") {
+                Picker("Final status", selection: $selectedStatus) {
+                    ForEach(Self.editableStatuses) { status in
+                        Text(status.displayName)
+                            .tag(status)
                     }
                 }
-            } else {
+
+                if requiresOverrideReason {
+                    Picker("Override reason", selection: $selectedReason) {
+                        ForEach(OverrideReason.allCases) { reason in
+                            Text(reason.displayName)
+                                .tag(reason)
+                        }
+                    }
+                }
+            }
+
+            Section("Note") {
+                TextEditor(text: $note)
+                    .frame(minHeight: 120)
+                    .accessibilityLabel("Attendance note")
+
+                Text("Notes are explanatory only unless saved with a manual status or leave status.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
+            }
+
+            if let saveError {
                 Section {
-                    Text("No attendance record for this day yet.")
-                        .foregroundStyle(Color.ds.textSecondary)
+                    Text(saveError)
+                        .foregroundStyle(Color.ds.critical)
                 }
             }
         }
         .navigationTitle(date.formatted(.dateTime.day().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    saveChanges()
+                }
+            }
+        }
+        .onAppear {
+            if let reason = existingManualAdjustment?.reason {
+                selectedReason = reason
+            }
+        }
+    }
+
+    private func saveChanges() {
+        let day = attendanceDay ?? AttendanceDay(
+            date: calendar.startOfDay(for: date),
+            detectedClassification: .unknown,
+            finalClassification: .unknown
+        )
+
+        if attendanceDay == nil {
+            modelContext.insert(day)
+        }
+
+        day.applyManualEdit(finalClassification: selectedStatus, note: note)
+        upsertManualAdjustment(for: day)
+        syncLeaveRecord()
+
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            saveError = "Changes could not be saved. Try again."
+        }
+    }
+
+    private func upsertManualAdjustment(for day: AttendanceDay) {
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard selectedStatus != (day.detectedClassification ?? .unknown) else {
+            if let existingAdjustment = manualAdjustments.first(where: { $0.attendanceDayId == day.id }) {
+                modelContext.delete(existingAdjustment)
+            }
+            return
+        }
+
+        if let existingAdjustment = manualAdjustments.first(where: { $0.attendanceDayId == day.id }) {
+            existingAdjustment.adjustedClassificationRaw = selectedStatus.rawValue
+            existingAdjustment.reasonRaw = selectedReason.rawValue
+            existingAdjustment.note = trimmedNote.isEmpty ? nil : trimmedNote
+            existingAdjustment.updatedAt = .now
+        } else {
+            let adjustment = ManualAdjustment(
+                attendanceDayId: day.id,
+                adjustedClassification: selectedStatus,
+                reason: selectedReason,
+                note: trimmedNote.isEmpty ? nil : trimmedNote
+            )
+            modelContext.insert(adjustment)
+        }
+    }
+
+    private func syncLeaveRecord() {
+        let dayStart = calendar.startOfDay(for: date)
+        let existingLeaveRecord = leaveRecords.first { leaveRecord in
+            calendar.isDate(leaveRecord.date, inSameDayAs: dayStart)
+        }
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let selectedLeaveType = selectedStatus.leaveType else {
+            if let existingLeaveRecord {
+                modelContext.delete(existingLeaveRecord)
+            }
+            return
+        }
+
+        if let existingLeaveRecord {
+            existingLeaveRecord.leaveTypeRaw = selectedLeaveType.rawValue
+            existingLeaveRecord.durationRaw = LeaveDuration.fullDay.rawValue
+            existingLeaveRecord.note = trimmedNote.isEmpty ? nil : trimmedNote
+            existingLeaveRecord.updatedAt = .now
+        } else {
+            let leaveRecord = LeaveRecord(
+                date: dayStart,
+                leaveType: selectedLeaveType,
+                duration: .fullDay,
+                note: trimmedNote.isEmpty ? nil : trimmedNote
+            )
+            modelContext.insert(leaveRecord)
+        }
     }
 }
 
 private extension AttendanceClassification {
+    var leaveType: LeaveType? {
+        switch self {
+        case .annualLeave:
+            .annualLeave
+        case .sickLeave:
+            .sickLeave
+        case .office, .home, .mixed, .publicHoliday, .weekend, .nonWorkingDay, .unknown:
+            nil
+        }
+    }
+
     var calendarBadgeText: String {
         switch self {
         case .office:

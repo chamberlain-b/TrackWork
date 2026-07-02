@@ -72,4 +72,43 @@ final class AttendanceEnumTests: XCTestCase {
         XCTAssertTrue(LeaveDuration.allCases.contains(.halfDayAM))
         XCTAssertTrue(LeaveDuration.allCases.contains(.halfDayPM))
     }
+
+    func testManualEditPreservesDetectedClassificationSeparately() {
+        let attendanceDay = AttendanceDay(
+            date: Date(timeIntervalSince1970: 0),
+            detectedClassification: .home,
+            finalClassification: .home
+        )
+
+        attendanceDay.applyManualEdit(
+            finalClassification: .office,
+            note: "Forgot work pass. Entered via reception.",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+
+        XCTAssertEqual(attendanceDay.detectedClassification, .home)
+        XCTAssertEqual(attendanceDay.finalClassification, .office)
+        XCTAssertEqual(attendanceDay.manualClassification, .office)
+        XCTAssertEqual(attendanceDay.note, "Forgot work pass. Entered via reception.")
+    }
+
+    func testManualEditTrimsEmptyNoteWithoutChangingStatusMeaning() {
+        let attendanceDay = AttendanceDay(
+            date: Date(timeIntervalSince1970: 0),
+            detectedClassification: .mixed,
+            finalClassification: .mixed,
+            note: "Existing note"
+        )
+
+        attendanceDay.applyManualEdit(
+            finalClassification: .unknown,
+            note: "   \n  ",
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+
+        XCTAssertEqual(attendanceDay.detectedClassification, .mixed)
+        XCTAssertEqual(attendanceDay.finalClassification, .unknown)
+        XCTAssertEqual(attendanceDay.manualClassification, .unknown)
+        XCTAssertNil(attendanceDay.note)
+    }
 }

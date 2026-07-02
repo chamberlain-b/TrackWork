@@ -62,4 +62,21 @@ extension AttendanceDay {
     var complianceTreatment: ComplianceTreatment? {
         ComplianceTreatment(rawValue: complianceTreatmentRaw)
     }
+
+    func applyManualEdit(
+        finalClassification: AttendanceClassification,
+        note: String?,
+        updatedAt: Date = .now
+    ) {
+        finalClassificationRaw = finalClassification.rawValue
+        manualClassificationRaw = finalClassification.rawValue
+        self.note = note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.updatedAt = updatedAt
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
 }
