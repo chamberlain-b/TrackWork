@@ -5,6 +5,16 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
+    private let workdays = [
+        Workday(id: 1, name: "Monday"),
+        Workday(id: 2, name: "Tuesday"),
+        Workday(id: 3, name: "Wednesday"),
+        Workday(id: 4, name: "Thursday"),
+        Workday(id: 5, name: "Friday"),
+        Workday(id: 6, name: "Saturday"),
+        Workday(id: 7, name: "Sunday")
+    ]
+
     private var activeRule: ComplianceRule? {
         complianceRules.first
     }
@@ -29,6 +39,10 @@ struct SettingsView: View {
         return availableJurisdictions.first?.id ?? ""
     }
 
+    private var selectedRequirementType: RequirementType {
+        activeRule?.requirementType ?? .fixedMonthlyDays
+    }
+
     private var countrySelection: Binding<Country> {
         Binding(
             get: { selectedCountry },
@@ -40,6 +54,41 @@ struct SettingsView: View {
         Binding(
             get: { selectedJurisdictionId },
             set: updateJurisdiction
+        )
+    }
+
+    private var requirementTypeSelection: Binding<RequirementType> {
+        Binding(
+            get: { selectedRequirementType },
+            set: updateRequirementType
+        )
+    }
+
+    private var fixedRequiredDaysBinding: Binding<Int> {
+        Binding(
+            get: { activeRule?.fixedRequiredDays ?? 0 },
+            set: updateFixedRequiredDays
+        )
+    }
+
+    private var requiredPercentageInputBinding: Binding<Double> {
+        Binding(
+            get: { (activeRule?.requiredPercentage ?? 0.5) * 100 },
+            set: updateRequiredPercentageInput
+        )
+    }
+
+    private var prorateFixedTargetBinding: Binding<Bool> {
+        Binding(
+            get: { activeRule?.prorateFixedTargetForLeave ?? true },
+            set: updateProrateFixedTarget
+        )
+    }
+
+    private var minimumOfficeMinutesBinding: Binding<Int> {
+        Binding(
+            get: { activeRule?.minimumOfficeMinutes ?? 0 },
+            set: updateMinimumOfficeMinutes
         )
     }
 
@@ -64,6 +113,57 @@ struct SettingsView: View {
                     Text("Region")
                 } footer: {
                     Text("Public holidays and monthly compliance use the selected country and jurisdiction.")
+                }
+
+                Section {
+                    Picker("Requirement type", selection: requirementTypeSelection) {
+                        ForEach(RequirementType.allCases) { requirementType in
+                            Text(requirementType.displayName)
+                                .tag(requirementType)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if selectedRequirementType == .fixedMonthlyDays {
+                        TextField("Fixed required days", value: fixedRequiredDaysBinding, format: .number)
+                            .keyboardType(.numberPad)
+
+                        Toggle("Prorate fixed target for leave", isOn: prorateFixedTargetBinding)
+                    } else {
+                        TextField(
+                            "Required percentage",
+                            value: requiredPercentageInputBinding,
+                            format: .number.precision(.fractionLength(0...2))
+                        )
+                        .keyboardType(.decimalPad)
+                    }
+                } header: {
+                    Text("Compliance Rule")
+                } footer: {
+                    if selectedRequirementType == .fixedMonthlyDays {
+                        Text("Fixed days must be 0 or greater. Leave prorating is on by default.")
+                    } else {
+                        Text("Enter a percentage from 0 to 100. The stored rule uses the equivalent 0 to 1 value.")
+                    }
+                }
+
+                Section {
+                    TextField("Minimum office minutes", value: minimumOfficeMinutesBinding, format: .number)
+                        .keyboardType(.numberPad)
+                } header: {
+                    Text("Office Day")
+                } footer: {
+                    Text("Minimum office minutes must be 0 or greater.")
+                }
+
+                Section {
+                    ForEach(workdays) { workday in
+                        Toggle(workday.name, isOn: workdaySelection(for: workday.id))
+                    }
+                } header: {
+                    Text("Selected Workdays")
+                } footer: {
+                    Text("At least one workday must remain selected. Monday to Friday is the default.")
                 }
             }
             .navigationTitle("Settings")
@@ -95,6 +195,75 @@ struct SettingsView: View {
         persist(rule)
     }
 
+    private func updateRequirementType(_ requirementType: RequirementType) {
+        let rule = ruleForEditing()
+        rule.requirementTypeRaw = requirementType.rawValue
+
+        if requirementType == .fixedMonthlyDays, rule.fixedRequiredDays == nil {
+            rule.fixedRequiredDays = 0
+        }
+
+        if requirementType == .percentageOfEligibleDays, rule.requiredPercentage == nil {
+            rule.requiredPercentage = 0.5
+        }
+
+        persist(rule)
+    }
+
+    private func updateFixedRequiredDays(_ fixedRequiredDays: Int) {
+        let rule = ruleForEditing()
+        rule.fixedRequiredDays = max(0, fixedRequiredDays)
+        persist(rule)
+    }
+
+    private func updateRequiredPercentageInput(_ requiredPercentageInput: Double) {
+        let rule = ruleForEditing()
+        let clampedPercentage = min(max(requiredPercentageInput, 0), 100) / 100
+        rule.requiredPercentage = clampedPercentage
+        persist(rule)
+    }
+
+    private func updateProrateFixedTarget(_ prorateFixedTarget: Bool) {
+        let rule = ruleForEditing()
+        rule.prorateFixedTargetForLeave = prorateFixedTarget
+        persist(rule)
+    }
+
+    private func updateMinimumOfficeMinutes(_ minimumOfficeMinutes: Int) {
+        let rule = ruleForEditing()
+        rule.minimumOfficeMinutes = max(0, minimumOfficeMinutes)
+        persist(rule)
+    }
+
+    private func workdaySelection(for weekday: Int) -> Binding<Bool> {
+        Binding(
+            get: {
+                let selectedWeekdays = activeRule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5]
+                return selectedWeekdays.contains(weekday)
+            },
+            set: { isSelected in
+                updateWorkday(weekday, isSelected: isSelected)
+            }
+        )
+    }
+
+    private func updateWorkday(_ weekday: Int, isSelected: Bool) {
+        let rule = ruleForEditing()
+        var selectedWeekdays = Set(rule.selectedISOWeekdays)
+
+        if isSelected {
+            selectedWeekdays.insert(weekday)
+        } else {
+            guard selectedWeekdays.count > 1 else {
+                return
+            }
+            selectedWeekdays.remove(weekday)
+        }
+
+        rule.selectedISOWeekdays = selectedWeekdays.sorted()
+        persist(rule)
+    }
+
     private func ruleForEditing() -> ComplianceRule {
         if let activeRule {
             return activeRule
@@ -119,6 +288,11 @@ struct SettingsView: View {
         rule.updatedAt = .now
         try? modelContext.save()
     }
+}
+
+private struct Workday: Identifiable {
+    let id: Int
+    let name: String
 }
 
 #Preview {
