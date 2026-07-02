@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct WorkTrackApp: App {
+struct TrackWorkApp: App {
     var body: some Scene {
         WindowGroup {
             AppRouter()

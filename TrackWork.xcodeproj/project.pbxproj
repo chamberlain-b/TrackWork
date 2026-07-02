@@ -9,6 +9,7 @@
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* TrackWork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrackWork.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F8A72992FF67DE600DC4D9E /* JurisdictionCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JurisdictionCatalogTests.swift; sourceTree = "<group>"; };
+		5F8A72A82FF67F1B00DC4D9E /* AttendanceEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceEnumTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -49,6 +50,7 @@
 			isa = PBXGroup;
 			children = (
 				5F8A72992FF67DE600DC4D9E /* JurisdictionCatalogTests.swift */,
+				5F8A72A82FF67F1B00DC4D9E /* AttendanceEnumTests.swift */,
 			);
 			path = TrackWorkTests;
 			sourceTree = "<group>";
