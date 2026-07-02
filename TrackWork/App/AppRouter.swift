@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftUI
 
 struct AppRouter: View {
@@ -8,4 +9,5 @@ struct AppRouter: View {
 
 #Preview {
     AppRouter()
+        .modelContainer(PreviewData.modelContainer())
 }
