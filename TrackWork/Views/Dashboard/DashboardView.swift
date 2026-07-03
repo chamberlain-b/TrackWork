@@ -60,6 +60,14 @@ struct DashboardView: View {
         )
     }
 
+    private var targetProgress: Double {
+        guard summary.requiredOfficeDays > 0 else {
+            return remainingOfficeDays == 0 ? 1 : 0
+        }
+
+        return min(Double(summary.completedOfficeDays) / Double(summary.requiredOfficeDays), 1)
+    }
+
     private var actualCompliancePercentage: Double {
         guard summary.adjustedEligibleDays > 0 else {
             return 0
@@ -206,6 +214,17 @@ struct DashboardView: View {
         }
     }
 
+    private var statusPillStyle: DSStatusPillStyle {
+        switch complianceStatus {
+        case .complete, .onTrack:
+            .success
+        case .atRisk:
+            .warning
+        case .impossible:
+            .critical
+        }
+    }
+
     private var bodyColumns: [GridItem] {
         [GridItem(.adaptive(minimum: 154), spacing: AppSpacing.md)]
     }
@@ -214,6 +233,18 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    ComplianceHeroCard(
+                        monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
+                        completedOfficeDays: summary.completedOfficeDays,
+                        requiredOfficeDays: summary.requiredOfficeDays,
+                        remainingOfficeDays: remainingOfficeDays,
+                        progress: targetProgress,
+                        statusText: complianceStatus.displayName,
+                        statusSubtitle: statusSubtitle,
+                        statusColor: statusColor,
+                        statusStyle: statusPillStyle
+                    )
+
                     DSInsightCallout(
                         icon: "calendar.badge.clock",
                         message: requirementExplanation,
@@ -222,88 +253,47 @@ struct DashboardView: View {
 
                     LazyVGrid(columns: bodyColumns, spacing: AppSpacing.md) {
                         DSMetricTile(
-                            systemImage: "calendar",
-                            label: "Current month",
-                            value: currentMonthStart.formatted(.dateTime.month(.wide).year()),
-                            subtitle: "Calendar month"
-                        )
-
-                        DSMetricTile(
-                            systemImage: "percent",
-                            label: "Compliance percentage",
-                            value: actualCompliancePercentage.formatted(.percent.precision(.fractionLength(0...1))),
-                            subtitle: "Office days / work max",
-                            statusColor: statusColor
-                        )
-
-                        DSMetricTile(
-                            systemImage: "building.2",
-                            label: "Completed office days",
-                            value: summary.completedOfficeDays.formatted(),
-                            subtitle: "Final attendance"
-                        )
-
-                        DSMetricTile(
-                            systemImage: "target",
-                            label: "Required office days",
-                            value: summary.requiredOfficeDays.formatted(),
-                            subtitle: requirementSubtitle
-                        )
-
-                        DSMetricTile(
-                            systemImage: "arrow.forward.circle",
-                            label: "Remaining office days",
-                            value: remainingOfficeDays.formatted(),
-                            subtitle: "Needed this month",
-                            statusColor: remainingOfficeDays == 0 ? Color.ds.success : Color.ds.accentPrimary
-                        )
-
-                        DSMetricTile(
                             systemImage: "calendar.day.timeline.left",
-                            label: "Base eligible days before leave",
-                            value: summary.baseEligibleDays.formatted(),
-                            subtitle: "After public holidays"
-                        )
-
-                        DSMetricTile(
-                            systemImage: "sun.max",
-                            label: "Annual leave excluded",
-                            value: annualLeaveExcludedDays.formatted(),
-                            subtitle: "Eligible days removed"
-                        )
-
-                        DSMetricTile(
-                            systemImage: "cross.case",
-                            label: "Sick leave excluded",
-                            value: sickLeaveExcludedDays.formatted(),
-                            subtitle: "Eligible days removed"
-                        )
-
-                        DSMetricTile(
-                            systemImage: "calendar.badge.checkmark",
-                            label: "Work max",
+                            label: "Eligible",
                             value: summary.adjustedEligibleDays.formatted(),
                             subtitle: "After holidays and leave"
                         )
 
                         DSMetricTile(
-                            systemImage: "sparkles",
-                            label: "Public holidays excluded",
-                            value: publicHolidaysExcludedDays.formatted(),
-                            subtitle: activeRule.jurisdictionId
-                        )
-
-                        DSMetricTile(
-                            systemImage: complianceStatus.systemImage,
-                            label: "Compliance status",
-                            value: complianceStatus.displayName,
-                            subtitle: statusSubtitle,
+                            systemImage: "percent",
+                            label: "Compliance",
+                            value: actualCompliancePercentage.formatted(.percent.precision(.fractionLength(0...1))),
+                            subtitle: "Office / eligible",
                             statusColor: statusColor
                         )
 
                         DSMetricTile(
+                            systemImage: "sun.max",
+                            label: "Annual leave",
+                            value: annualLeaveExcludedDays.formatted(),
+                            subtitle: "Eligible days removed",
+                            statusColor: Color.ds.leaveDay
+                        )
+
+                        DSMetricTile(
+                            systemImage: "cross.case",
+                            label: "Sick leave",
+                            value: sickLeaveExcludedDays.formatted(),
+                            subtitle: "Eligible days removed",
+                            statusColor: Color.ds.leaveDay
+                        )
+
+                        DSMetricTile(
+                            systemImage: "sparkles",
+                            label: "Holidays",
+                            value: publicHolidaysExcludedDays.formatted(),
+                            subtitle: activeRule.jurisdictionId,
+                            statusColor: Color.ds.publicHoliday
+                        )
+
+                        DSMetricTile(
                             systemImage: "exclamationmark.bubble",
-                            label: "Days requiring review",
+                            label: "Review",
                             value: summary.reviewRequiredDays.formatted(),
                             subtitle: "Unknown final status",
                             statusColor: summary.reviewRequiredDays == 0 ? Color.ds.success : Color.ds.warning
@@ -316,15 +306,6 @@ struct DashboardView: View {
             .appScreenBackground()
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private var requirementSubtitle: String {
-        switch activeRule.requirementType ?? .fixedMonthlyDays {
-        case .fixedMonthlyDays:
-            activeRule.prorateFixedTargetForLeave ? "Leave-adjusted fixed target" : "Fixed monthly target"
-        case .percentageOfEligibleDays:
-            "Based on adjusted eligible days"
         }
     }
 
@@ -373,6 +354,85 @@ struct DashboardView: View {
         }
 
         return lhs.leaveTypeRaw < rhs.leaveTypeRaw
+    }
+}
+
+private struct ComplianceHeroCard: View {
+    let monthTitle: String
+    let completedOfficeDays: Int
+    let requiredOfficeDays: Int
+    let remainingOfficeDays: Int
+    let progress: Double
+    let statusText: String
+    let statusSubtitle: String
+    let statusColor: Color
+    let statusStyle: DSStatusPillStyle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            HStack(alignment: .top, spacing: AppSpacing.md) {
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text(monthTitle)
+                        .font(AppTypography.captionStrong)
+                        .foregroundStyle(Color.ds.textSecondary)
+
+                    Text("\(completedOfficeDays) of \(requiredOfficeDays)")
+                        .font(AppTypography.heroMetric.monospacedDigit())
+                        .foregroundStyle(Color.ds.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Text("office days")
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+
+                Spacer(minLength: AppSpacing.md)
+
+                ZStack {
+                    Circle()
+                        .stroke(Color.ds.accentMuted.opacity(0.26), lineWidth: 10)
+
+                    Circle()
+                        .trim(from: 0, to: min(max(progress, 0), 1))
+                        .stroke(
+                            statusColor,
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+
+                    Text(progress.formatted(.percent.precision(.fractionLength(0))))
+                        .font(AppTypography.captionStrong.monospacedDigit())
+                        .foregroundStyle(Color.ds.textPrimary)
+                }
+                .frame(width: 82, height: 82)
+                .accessibilityLabel("Target progress \(progress.formatted(.percent.precision(.fractionLength(0))))")
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                HStack(spacing: AppSpacing.sm) {
+                    DSStatusPill(text: statusText, systemImage: "checkmark.circle.fill", style: statusStyle)
+
+                    Text(statusSubtitle)
+                        .font(AppTypography.captionStrong)
+                        .foregroundStyle(Color.ds.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                }
+
+                ProgressView(value: min(max(progress, 0), 1))
+                    .tint(statusColor)
+                    .background(Color.ds.accentMuted.opacity(0.2), in: Capsule())
+                    .scaleEffect(x: 1, y: 1.45, anchor: .center)
+
+                Label("\(remainingOfficeDays) office day\(remainingOfficeDays == 1 ? "" : "s") remaining this month", systemImage: "arrow.forward.circle")
+                    .font(AppTypography.callout)
+                    .foregroundStyle(Color.ds.textSecondary)
+            }
+        }
+        .padding(AppSpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassSurface(cornerRadius: AppRadius.heroCard, tint: statusColor)
     }
 }
 

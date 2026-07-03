@@ -14,15 +14,14 @@ struct DSMetricTile: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(statusColor)
                     .frame(width: 30, height: 30)
-                    .background(statusColor.opacity(0.12))
-                    .clipShape(Circle())
+                    .background(statusColor.opacity(0.1), in: Circle())
 
                 Spacer(minLength: AppSpacing.xs)
             }
 
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text(label)
-                    .font(AppTypography.caption)
+                    .font(AppTypography.captionStrong)
                     .foregroundStyle(Color.ds.textSecondary)
                     .lineLimit(2)
 
@@ -30,23 +29,24 @@ struct DSMetricTile: View {
                     .font(AppTypography.smallMetric.monospacedDigit())
                     .foregroundStyle(Color.ds.textPrimary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.78)
 
                 if let subtitle {
                     Text(subtitle)
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.textTertiary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
                 }
             }
         }
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.ds.surfaceSecondary)
+        .background(Color.ds.surfaceSecondary.opacity(0.78))
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .stroke(Color.ds.borderSubtle, lineWidth: 1)
+                .stroke(Color.ds.borderSubtle.opacity(0.62), lineWidth: 1)
         }
     }
 }

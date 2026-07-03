@@ -46,8 +46,14 @@ struct MonthCalendarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     monthHeader
-                    weekdayHeader
-                    monthGrid
+                    statusLegend
+
+                    VStack(spacing: AppSpacing.sm) {
+                        weekdayHeader
+                        monthGrid
+                    }
+                    .padding(AppSpacing.sm)
+                    .glassSurface(cornerRadius: AppRadius.card, tint: Color.ds.surfaceGlass)
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.vertical, AppSpacing.lg)
@@ -80,14 +86,22 @@ struct MonthCalendarView: View {
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
+            .glassSurface(cornerRadius: AppRadius.pill, tint: Color.ds.surfaceGlass, isInteractive: true)
             .accessibilityLabel("Previous month")
 
-            Text(monthTitle)
-                .font(AppTypography.title)
-                .foregroundStyle(Color.ds.textPrimary)
-                .frame(maxWidth: .infinity)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            VStack(spacing: AppSpacing.xxs) {
+                Text(monthTitle)
+                    .font(AppTypography.title)
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text("Month-bound compliance period")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
 
             Button {
                 moveMonth(by: 1)
@@ -97,10 +111,26 @@ struct MonthCalendarView: View {
                     .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
+            .glassSurface(cornerRadius: AppRadius.pill, tint: Color.ds.surfaceGlass, isInteractive: true)
             .accessibilityLabel("Next month")
         }
         .padding(AppSpacing.sm)
-        .cardSurface(includesShadow: false)
+        .glassSurface(cornerRadius: AppRadius.card, tint: Color.ds.surfaceGlass)
+    }
+
+    private var statusLegend: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: AppSpacing.xs) {
+                LegendPill(text: "Office", token: "O", color: Color.ds.officeDay)
+                LegendPill(text: "Home", token: "H", color: Color.ds.homeDay)
+                LegendPill(text: "Mixed", token: "M", color: Color.ds.info)
+                LegendPill(text: "Leave", token: "AL", color: Color.ds.leaveDay)
+                LegendPill(text: "Holiday", token: "PH", color: Color.ds.publicHoliday)
+                LegendPill(text: "Review", token: "?", color: Color.ds.warning)
+            }
+            .padding(.vertical, 1)
+        }
+        .scrollClipDisabled()
     }
 
     private var weekdayHeader: some View {
@@ -349,6 +379,33 @@ private struct BatchLeaveView: View {
     }
 }
 
+private struct LegendPill: View {
+    let text: String
+    let token: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: AppSpacing.xxs) {
+            Text(token)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(color)
+                .frame(minWidth: 24, minHeight: 20)
+                .background(color.opacity(0.12), in: Capsule(style: .continuous))
+
+            Text(text)
+                .font(AppTypography.captionStrong)
+                .foregroundStyle(Color.ds.textSecondary)
+        }
+        .padding(.horizontal, AppSpacing.xs)
+        .padding(.vertical, AppSpacing.xxs)
+        .background(Color.ds.surfacePrimary.opacity(0.72), in: Capsule(style: .continuous))
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(Color.ds.borderSubtle.opacity(0.64), lineWidth: 1)
+        }
+    }
+}
+
 private struct CalendarDay: Identifiable {
     let id = UUID()
     let date: Date?
@@ -379,11 +436,19 @@ private struct DayCell: View {
     }
 
     private var badgeBackgroundColor: Color {
-        leaveType == nil ? status.calendarBadgeBackgroundColor : Color.ds.leaveDay.opacity(0.18)
+        badgeForegroundColor.opacity(0.12)
     }
 
     private var badgeForegroundColor: Color {
         leaveType == nil ? status.calendarBadgeForegroundColor : Color.ds.leaveDay
+    }
+
+    private var cellTint: Color {
+        badgeForegroundColor
+    }
+
+    private var isToday: Bool {
+        calendar.isDateInToday(date)
     }
 
     private var accessibilityStatus: String {
@@ -392,9 +457,20 @@ private struct DayCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(dayNumber, format: .number)
-                .font(AppTypography.captionStrong)
-                .foregroundStyle(Color.ds.textPrimary)
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
+                Text(dayNumber, format: .number)
+                    .font(AppTypography.captionStrong.monospacedDigit())
+                    .foregroundStyle(Color.ds.textPrimary)
+
+                Spacer(minLength: 0)
+
+                if isToday {
+                    Circle()
+                        .fill(Color.ds.accentPrimary)
+                        .frame(width: 5, height: 5)
+                        .accessibilityHidden(true)
+                }
+            }
 
             Spacer(minLength: 0)
 
@@ -404,16 +480,19 @@ private struct DayCell: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, minHeight: 22)
-                .background(badgeBackgroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous))
+                .background(badgeBackgroundColor, in: RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous)
+                        .stroke(badgeForegroundColor.opacity(0.16), lineWidth: 1)
+                }
         }
         .padding(AppSpacing.xs)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
-        .background(Color.ds.surfacePrimary)
+        .background(Color.ds.surfacePrimary.opacity(0.74))
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
-                .stroke(Color.ds.borderSubtle, lineWidth: 1)
+                .stroke(isToday ? Color.ds.accentPrimary.opacity(0.42) : cellTint.opacity(0.12), lineWidth: isToday ? 1.5 : 1)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(date.formatted(.dateTime.day().month(.wide))), \(accessibilityStatus)")
@@ -533,76 +612,139 @@ private struct DayDetailView: View {
     }
 
     var body: some View {
-        Form {
-            Section("Day") {
-                LabeledContent("Date", value: date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()))
-                LabeledContent("Detected status", value: detectedStatus.displayName)
-                LabeledContent("Final status", value: finalStatus.displayName)
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                DSCard(includesShadow: false) {
+                    VStack(alignment: .leading, spacing: AppSpacing.md) {
+                        HStack(alignment: .top, spacing: AppSpacing.md) {
+                            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                                Text(date.formatted(.dateTime.weekday(.wide)))
+                                    .font(AppTypography.captionStrong)
+                                    .foregroundStyle(Color.ds.textSecondary)
 
-            if let attendanceDay {
-                Section("Attendance") {
-                    LabeledContent("Office minutes", value: attendanceDay.officeMinutes.formatted())
-                    LabeledContent("Home minutes", value: attendanceDay.homeMinutes.formatted())
-                    LabeledContent("Compliance", value: attendanceDay.complianceTreatment?.displayName ?? ComplianceTreatment.requiresReview.displayName)
-                }
-            }
+                                Text(date.formatted(.dateTime.day().month(.wide).year()))
+                                    .font(AppTypography.title)
+                                    .foregroundStyle(Color.ds.textPrimary)
+                                    .lineLimit(2)
+                            }
 
-            Section("Leave") {
-                Picker("Full-day leave", selection: $selectedLeave) {
-                    ForEach(LeaveSelection.allCases) { selection in
-                        Text(selection.displayName)
-                            .tag(selection)
-                    }
-                }
+                            Spacer(minLength: AppSpacing.sm)
 
-                if selectedLeave.leaveType != nil {
-                    LabeledContent("Duration", value: LeaveDuration.fullDay.displayName)
-                }
+                            DSStatusPill(
+                                text: finalStatus.displayName,
+                                systemImage: "checkmark.circle.fill",
+                                style: statusPillStyle(for: finalStatus)
+                            )
+                        }
 
-                LabeledContent("Eligible day impact", value: eligibleDayImpactText)
+                        Divider()
+                            .overlay(Color.ds.separator)
 
-                Text(eligibleDayImpactReason)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-            }
-
-            Section("Manual status") {
-                Picker("Final status", selection: $selectedStatus) {
-                    ForEach(Self.editableStatuses) { status in
-                        Text(status.displayName)
-                            .tag(status)
-                    }
-                }
-                .disabled(selectedLeave.leaveType != nil)
-
-                if requiresOverrideReason {
-                    Picker("Override reason", selection: $selectedReason) {
-                        ForEach(OverrideReason.allCases) { reason in
-                            Text(reason.displayName)
-                                .tag(reason)
+                        VStack(spacing: AppSpacing.sm) {
+                            DetailInfoRow(title: "Detected", value: detectedStatus.displayName, color: detectedStatus.calendarBadgeForegroundColor)
+                            DetailInfoRow(title: "Final", value: finalStatus.displayName, color: finalStatus.calendarBadgeForegroundColor)
+                            DetailInfoRow(title: "Treatment", value: complianceTreatment(for: finalStatus).displayName, color: finalStatus.calendarBadgeForegroundColor)
                         }
                     }
                 }
-            }
 
-            Section("Note") {
-                TextEditor(text: $note)
-                    .frame(minHeight: 120)
-                    .accessibilityLabel("Attendance note")
+                DSCard(includesShadow: false) {
+                    VStack(alignment: .leading, spacing: AppSpacing.md) {
+                        Text("Manual status")
+                            .font(AppTypography.cardTitle)
+                            .foregroundStyle(Color.ds.textPrimary)
 
-                Text("Notes are explanatory only unless saved with a manual status or leave status.")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-            }
+                        Picker("Final status", selection: $selectedStatus) {
+                            ForEach(Self.editableStatuses) { status in
+                                Text(status.displayName)
+                                    .tag(status)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(selectedLeave.leaveType != nil)
 
-            if let saveError {
-                Section {
-                    Text(saveError)
-                        .foregroundStyle(Color.ds.critical)
+                        if requiresOverrideReason {
+                            Picker("Override reason", selection: $selectedReason) {
+                                ForEach(OverrideReason.allCases) { reason in
+                                    Text(reason.displayName)
+                                        .tag(reason)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                DSCard(includesShadow: false) {
+                    VStack(alignment: .leading, spacing: AppSpacing.md) {
+                        Text("Leave")
+                            .font(AppTypography.cardTitle)
+                            .foregroundStyle(Color.ds.textPrimary)
+
+                        Picker("Full-day leave", selection: $selectedLeave) {
+                            ForEach(LeaveSelection.allCases) { selection in
+                                Text(selection.displayName)
+                                    .tag(selection)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        if selectedLeave.leaveType != nil {
+                            DetailInfoRow(title: "Duration", value: LeaveDuration.fullDay.displayName, color: Color.ds.leaveDay)
+                        }
+
+                        DetailInfoRow(title: "Eligible impact", value: eligibleDayImpactText, color: leaveReducesEligibleDay ? Color.ds.leaveDay : Color.ds.textTertiary)
+
+                        Text(eligibleDayImpactReason)
+                            .font(AppTypography.caption)
+                            .foregroundStyle(Color.ds.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let attendanceDay {
+                    DSCard(includesShadow: false) {
+                        VStack(alignment: .leading, spacing: AppSpacing.md) {
+                            Text("Attendance")
+                                .font(AppTypography.cardTitle)
+                                .foregroundStyle(Color.ds.textPrimary)
+
+                            DetailInfoRow(title: "Office minutes", value: attendanceDay.officeMinutes.formatted(), color: Color.ds.officeDay)
+                            DetailInfoRow(title: "Home minutes", value: attendanceDay.homeMinutes.formatted(), color: Color.ds.homeDay)
+                            DetailInfoRow(title: "Compliance", value: attendanceDay.complianceTreatment?.displayName ?? ComplianceTreatment.requiresReview.displayName, color: Color.ds.info)
+                        }
+                    }
+                }
+
+                DSCard(includesShadow: false) {
+                    VStack(alignment: .leading, spacing: AppSpacing.md) {
+                        Text("Note")
+                            .font(AppTypography.cardTitle)
+                            .foregroundStyle(Color.ds.textPrimary)
+
+                        TextEditor(text: $note)
+                            .frame(minHeight: 120)
+                            .padding(AppSpacing.xs)
+                            .background(Color.ds.surfaceSecondary.opacity(0.62), in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous))
+                            .accessibilityLabel("Attendance note")
+
+                        Text("Notes are explanatory only unless saved with a manual status or leave status.")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(Color.ds.textSecondary)
+                    }
+                }
+
+                if let saveError {
+                    DSInsightCallout(
+                        icon: "exclamationmark.triangle",
+                        message: saveError,
+                        highlightedText: "Changes could not be saved"
+                    )
                 }
             }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.vertical, AppSpacing.lg)
         }
+        .appScreenBackground()
         .navigationTitle(date.formatted(.dateTime.day().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -610,12 +752,24 @@ private struct DayDetailView: View {
                 Button("Save") {
                     saveChanges()
                 }
+                .buttonStyle(.glassProminent)
             }
         }
         .onAppear {
             if let reason = existingManualAdjustment?.reason {
                 selectedReason = reason
             }
+        }
+    }
+
+    private func statusPillStyle(for status: AttendanceClassification) -> DSStatusPillStyle {
+        switch status {
+        case .office:
+            .success
+        case .mixed, .unknown:
+            .warning
+        case .home, .annualLeave, .sickLeave, .publicHoliday, .weekend, .nonWorkingDay:
+            .neutral
         }
     }
 
@@ -713,6 +867,28 @@ private struct DayDetailView: View {
             .excludedFromRequirement
         case .unknown:
             .requiresReview
+        }
+    }
+}
+
+private struct DetailInfoRow: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+            Text(title)
+                .font(AppTypography.callout)
+                .foregroundStyle(Color.ds.textSecondary)
+
+            Spacer(minLength: AppSpacing.sm)
+
+            Text(value)
+                .font(AppTypography.callout.weight(.semibold))
+                .foregroundStyle(color)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
         }
     }
 }

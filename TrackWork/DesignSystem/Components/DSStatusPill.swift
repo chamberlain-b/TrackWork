@@ -19,11 +19,11 @@ enum DSStatusPillStyle: CaseIterable {
 
     var background: Color {
         switch self {
-        case .info: Color.ds.info.opacity(0.12)
-        case .success: Color.ds.success.opacity(0.12)
-        case .warning: Color.ds.warning.opacity(0.14)
-        case .critical: Color.ds.critical.opacity(0.12)
-        case .neutral: Color.ds.surfaceSecondary
+        case .info: Color.ds.info.opacity(0.1)
+        case .success: Color.ds.success.opacity(0.1)
+        case .warning: Color.ds.warning.opacity(0.12)
+        case .critical: Color.ds.critical.opacity(0.1)
+        case .neutral: Color.ds.surfaceSecondary.opacity(0.82)
         }
     }
 }
@@ -38,6 +38,7 @@ struct DSStatusPill: View {
             Text(text)
                 .font(AppTypography.captionStrong)
                 .lineLimit(1)
+                .minimumScaleFactor(0.82)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)
@@ -47,8 +48,11 @@ struct DSStatusPill: View {
         .foregroundStyle(style.foreground)
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)
-        .background(style.background)
-        .clipShape(Capsule(style: .continuous))
+        .background(style.background, in: Capsule(style: .continuous))
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(style.foreground.opacity(0.16), lineWidth: 1)
+        }
         .accessibilityElement(children: .combine)
     }
 }

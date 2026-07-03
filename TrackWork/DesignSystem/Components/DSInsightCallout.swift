@@ -10,25 +10,24 @@ struct DSInsightCallout: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.ds.info)
-                .frame(width: 28, height: 28)
-                .background(Color.ds.info.opacity(0.12))
-                .clipShape(Circle())
+                .frame(width: 30, height: 30)
+                .background(Color.ds.info.opacity(0.1), in: Circle())
 
-            if let highlightedText {
-                Text("\(Text(message)) \(Text(highlightedText).fontWeight(.semibold))")
-            } else {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                if let highlightedText {
+                    Text(highlightedText)
+                        .font(AppTypography.captionStrong)
+                        .foregroundStyle(Color.ds.textPrimary)
+                }
+
                 Text(message)
+                    .font(AppTypography.callout)
+                    .foregroundStyle(Color.ds.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .font(AppTypography.callout)
-        .foregroundStyle(Color.ds.textSecondary)
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.ds.info.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .stroke(Color.ds.info.opacity(0.14), lineWidth: 1)
-        }
+        .glassSurface(cornerRadius: AppRadius.lg, tint: Color.ds.info)
     }
 }
