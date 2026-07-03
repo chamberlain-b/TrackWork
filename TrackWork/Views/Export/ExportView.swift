@@ -11,11 +11,13 @@ struct ExportView: View {
     @State private var selectedMonth = Date.now
     @State private var includeNotes = true
     @State private var generatedFileURL: URL?
+    @State private var generatedExportKind: ExportKind?
     @State private var generationError: String?
 
     private let calendar = Calendar.exportCalendar
     private let snapshotBuilder = ReportSnapshotBuilder()
     private let csvExportService = CSVExportService()
+    private let pdfExportService = PDFExportService()
 
     private var activeRule: ComplianceRule {
         complianceRules.first ?? ComplianceRule()
@@ -38,8 +40,8 @@ struct ExportView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     DSInsightCallout(
-                        icon: "tablecells",
-                        message: "CSV exports include monthly summary, daily records, leave, manual overrides, public holidays, and settings.",
+                        icon: "doc.richtext",
+                        message: "Exports include monthly summary, daily records, leave, manual overrides, public holidays, and settings without raw location events or GPS coordinates.",
                         highlightedText: selectedMonthTitle
                     )
 
@@ -59,24 +61,32 @@ struct ExportView: View {
                             Toggle("Include notes", isOn: $includeNotes)
                                 .tint(Color.ds.accentPrimary)
 
-                            DSButton(
-                                title: "Generate CSV",
-                                systemImage: "doc.badge.plus",
-                                action: generateCSV
-                            )
+                            HStack(spacing: AppSpacing.sm) {
+                                DSButton(
+                                    title: "Generate PDF",
+                                    systemImage: "doc.badge.plus",
+                                    action: generatePDF
+                                )
+
+                                DSButton(
+                                    title: "Generate CSV",
+                                    systemImage: "tablecells.badge.ellipsis",
+                                    action: generateCSV
+                                )
+                            }
                         }
                     }
 
-                    if let generatedFileURL, let generatedFileName {
+                    if let generatedFileURL, let generatedFileName, let generatedExportKind {
                         DSCard {
                             VStack(alignment: .leading, spacing: AppSpacing.md) {
-                                Label(generatedFileName, systemImage: "doc.text")
+                                Label(generatedFileName, systemImage: generatedExportKind.systemImage)
                                     .font(AppTypography.headline)
                                     .foregroundStyle(Color.ds.textPrimary)
                                     .lineLimit(2)
 
                                 ShareLink(item: generatedFileURL) {
-                                    Label("Share CSV", systemImage: "square.and.arrow.up")
+                                    Label("Share \(generatedExportKind.label)", systemImage: "square.and.arrow.up")
                                         .font(AppTypography.headline)
                                         .foregroundStyle(Color.ds.textInverse)
                                         .frame(maxWidth: .infinity)
@@ -109,32 +119,74 @@ struct ExportView: View {
         }
     }
 
+    private func generatePDF() {
+        generateExport(kind: .pdf) { snapshot in
+            try pdfExportService.writePDF(from: snapshot)
+        }
+    }
+
     private func generateCSV() {
+        generateExport(kind: .csv) { snapshot in
+            try csvExportService.writeCSV(from: snapshot)
+        }
+    }
+
+    private func generateExport(kind: ExportKind, writeFile: (ReportSnapshot) throws -> URL) {
         do {
             generationError = nil
-            let snapshot = try snapshotBuilder.build(
-                ReportSnapshotBuilder.Input(
-                    month: selectedMonthStart,
-                    calendar: calendar,
-                    rule: activeRule,
-                    attendanceDays: attendanceDays,
-                    leaveRecords: leaveRecords,
-                    manualAdjustments: manualAdjustments,
-                    publicHolidays: publicHolidays.filter { $0.jurisdictionId == activeRule.jurisdictionId },
-                    options: ReportSnapshot.Options(includeNotes: includeNotes),
-                    generatedAt: .now
-                )
-            )
-            generatedFileURL = try csvExportService.writeCSV(from: snapshot)
+            let snapshot = try makeSnapshot()
+            generatedFileURL = try writeFile(snapshot)
+            generatedExportKind = kind
         } catch {
             generatedFileURL = nil
-            generationError = "The CSV could not be generated for \(selectedMonthTitle)."
+            generatedExportKind = nil
+            generationError = "The \(kind.label) could not be generated for \(selectedMonthTitle)."
         }
+    }
+
+    private func makeSnapshot() throws -> ReportSnapshot {
+        try snapshotBuilder.build(
+            ReportSnapshotBuilder.Input(
+                month: selectedMonthStart,
+                calendar: calendar,
+                rule: activeRule,
+                attendanceDays: attendanceDays,
+                leaveRecords: leaveRecords,
+                manualAdjustments: manualAdjustments,
+                publicHolidays: publicHolidays.filter { $0.jurisdictionId == activeRule.jurisdictionId },
+                options: ReportSnapshot.Options(includeNotes: includeNotes),
+                generatedAt: .now
+            )
+        )
     }
 
     private func clearGeneratedFile() {
         generatedFileURL = nil
+        generatedExportKind = nil
         generationError = nil
+    }
+}
+
+private enum ExportKind {
+    case pdf
+    case csv
+
+    var label: String {
+        switch self {
+        case .pdf:
+            "PDF"
+        case .csv:
+            "CSV"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pdf:
+            "doc.richtext"
+        case .csv:
+            "tablecells"
+        }
     }
 }
 
