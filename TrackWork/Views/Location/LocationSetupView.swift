@@ -5,8 +5,9 @@ import UIKit
 
 struct LocationSetupView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(LocationTrackingService.self) private var locationTrackingService
     @Query(sort: \Place.typeRaw) private var places: [Place]
-    @State private var locationAuthorizationService = LocationAuthorizationService()
+    @State private var locationAuthorizationService = LocationAuthorizationService(automaticBackgroundTrackingEnabled: true)
 
     private var homePlace: Place? {
         place(for: .home)
@@ -40,7 +41,7 @@ struct LocationSetupView: View {
             } header: {
                 Text("Location Access")
             } footer: {
-                Text("Work Track uses location only after you choose to allow it. This enables future private home and office attendance detection; it does not start tracking or geofencing yet.")
+                Text("Work Track uses location only after you choose to allow it. Saved home and office places can be monitored with geofences; manual attendance still works without permission.")
             }
 
             Section {
@@ -54,7 +55,7 @@ struct LocationSetupView: View {
             } header: {
                 Text("Background Access")
             } footer: {
-                Text("Always authorization is a separate later step. Work Track will request it only after automatic background attendance tracking is enabled and explained in-app.")
+                Text("Background location access lets iOS deliver home and office geofence events when Work Track is not open. This uses region monitoring, not continuous GPS.")
             }
 
             Section {
@@ -63,13 +64,17 @@ struct LocationSetupView: View {
             } header: {
                 Text("Places")
             } footer: {
-                Text("These saved places will be used by a later location milestone. Work Track does not start location tracking from this setup screen.")
+                Text(locationTrackingService.statusDescription)
             }
         }
         .navigationTitle("Location Setup")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             locationAuthorizationService.refreshAuthorizationStatus()
+            locationTrackingService.refreshMonitoring(for: places)
+        }
+        .onChange(of: authorizationStatus) { _, _ in
+            locationTrackingService.refreshMonitoring(for: places)
         }
     }
 
@@ -241,4 +246,5 @@ struct LocationSetupView: View {
         LocationSetupView()
     }
     .modelContainer(PreviewData.modelContainer())
+    .environment(LocationTrackingService())
 }

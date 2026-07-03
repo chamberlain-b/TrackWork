@@ -169,6 +169,7 @@ enum PreviewData {
             ManualAdjustment.self,
             ComplianceRule.self,
             Place.self,
+            LocationEvent.self,
             PublicHoliday.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

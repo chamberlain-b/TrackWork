@@ -13,6 +13,7 @@ struct TrackWorkApp: App {
             ManualAdjustment.self,
             ComplianceRule.self,
             Place.self,
+            LocationEvent.self,
             PublicHoliday.self
         ])
     }

@@ -101,10 +101,18 @@ struct SettingsView: View {
                     } label: {
                         Label("Location Setup", systemImage: "location.circle")
                     }
+
+                    #if DEBUG
+                    NavigationLink {
+                        RecentLocationEventsView()
+                    } label: {
+                        Label("Recent Location Events", systemImage: "list.bullet.rectangle")
+                    }
+                    #endif
                 } header: {
                     Text("Location")
                 } footer: {
-                    Text("Save home and office coordinates for later attendance detection. This does not request location permission or start tracking.")
+                    Text("Save home and office coordinates for private geofence attendance detection. Manual attendance still works when permission is denied.")
                 }
 
                 Section {

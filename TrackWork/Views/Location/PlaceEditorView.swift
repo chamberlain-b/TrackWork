@@ -55,7 +55,7 @@ struct PlaceEditorView: View {
             } header: {
                 Text("Coordinates")
             } footer: {
-                Text("Enter decimal coordinates manually or choose them on the map. This does not request location access or start tracking.")
+                Text("Enter decimal coordinates manually or choose them on the map. Saved active places are used for geofence monitoring when permission allows.")
             }
 
             Section {
@@ -68,7 +68,7 @@ struct PlaceEditorView: View {
             } header: {
                 Text("Detection Radius")
             } footer: {
-                Text("150 metres is the default. Geofencing will be added in a later milestone.")
+                Text("150 metres is the default. iOS may adjust very small or unsupported geofence radii.")
             }
 
             if let saveError {

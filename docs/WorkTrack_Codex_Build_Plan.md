@@ -866,6 +866,12 @@ Early development fallback:
 .csv export
 ```
 
+Dependency decision:
+
+- CSV remains the MVP Excel-compatible export.
+- Native `.xlsx` export is deferred until CSV/PDF export foundations are stable and a true workbook format is needed.
+- Do not add an `.xlsx` package for the MVP CSV milestone.
+
 Workbook tabs:
 
 ```text
@@ -1597,19 +1603,26 @@ feat: add styled PDF report export
 
 ### Goal
 
-Add Excel export.
+Add Excel-compatible export.
+
+Current dependency decision:
+
+- Keep CSV as the MVP Excel-compatible export.
+- Defer native `.xlsx` workbook generation to a later enhancement.
+- Do not add a Swift Package for this milestone unless the milestone is explicitly reopened for native `.xlsx` implementation.
 
 ### Recommended sequence
 
 1. Keep CSV export working.
-2. Evaluate Swift Package options for `.xlsx`.
-3. Add one package only after checking:
+2. Document CSV as the supported MVP Excel-compatible format.
+3. If native `.xlsx` is later required, re-check Swift Package options before implementation.
+4. Add one package only after checking:
    - active maintenance
    - iOS support
    - license
    - app size impact
    - whether it supports writing, not just reading
-4. Implement workbook tabs:
+5. For native `.xlsx`, implement workbook tabs:
    - Summary
    - Daily Records
    - Leave
@@ -1625,10 +1638,11 @@ Implement Excel-compatible export.
 First inspect the project and current export services.
 
 Preferred:
-- Add a true .xlsx writer package if appropriate.
-- If the package is unsuitable, implement a clean CSV fallback and document the limitation.
+- Keep CSV as the MVP Excel-compatible export.
+- Do not add an .xlsx package unless this prompt is explicitly revised to request native .xlsx.
+- Document native .xlsx as a later enhancement.
 
-The workbook should include tabs:
+The workbook or CSV sections should include:
 1. Summary
 2. Daily Records
 3. Leave
@@ -2152,6 +2166,19 @@ OpenAI Codex references:
 Possible Excel export packages to evaluate:
 
 - Objects2XLSX: https://swiftpackageindex.com/fatbobman/Objects2XLSX
+  - Preferred future SwiftPM candidate if native `.xlsx` export becomes necessary.
+  - Supports writing `.xlsx` files and has iOS support.
 - libxlsxwriter: https://swiftpackageindex.com/jmcnamara/libxlsxwriter
-- xlsxwriter.swift: https://github.com/damuellen/xlsxwriter.swift
+  - Mature writer, but higher integration complexity because it is a C API.
+- CoreXLSX: https://swiftpackageindex.com/CoreOffice/CoreXLSX
+  - Read-only parser, not suitable for export generation.
+- SwiftXLSX: https://github.com/3973770/SwiftXLSX
+  - Writes `.xlsx`, but appears stale compared with other options.
 - XlsxReaderWriter: https://charlymr.github.io/XlsxReaderWriter/
+  - Can modify and save workbooks, but cannot create workbooks from scratch.
+- xlsxwriter.swift: https://github.com/damuellen/xlsxwriter.swift
+  - Swift wrapper around libxlsxwriter, but still carries the underlying C library integration considerations.
+
+Current recommendation:
+
+- Keep CSV as the MVP Excel-compatible export and document native `.xlsx` as a later enhancement.

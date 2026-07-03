@@ -16,6 +16,7 @@
 		5F8A72D52FF73C3700DC4D9E /* CSVExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVExportServiceTests.swift; sourceTree = "<group>"; };
 		5F8A72D82FF7409E00DC4D9E /* PDFExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFExportServiceTests.swift; sourceTree = "<group>"; };
 		5F8A72DE2FF742FB00DC4D9E /* PlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceTests.swift; sourceTree = "<group>"; };
+		5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEventTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -63,6 +64,7 @@
 				5F8A72D52FF73C3700DC4D9E /* CSVExportServiceTests.swift */,
 				5F8A72D82FF7409E00DC4D9E /* PDFExportServiceTests.swift */,
 				5F8A72DE2FF742FB00DC4D9E /* PlaceTests.swift */,
+				5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */,
 			);
 			path = TrackWorkTests;
 			sourceTree = "<group>";
