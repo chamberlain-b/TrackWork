@@ -60,6 +60,14 @@ struct DashboardView: View {
         )
     }
 
+    private var actualCompliancePercentage: Double {
+        guard summary.adjustedEligibleDays > 0 else {
+            return 0
+        }
+
+        return Double(summary.completedOfficeDays) / Double(summary.adjustedEligibleDays)
+    }
+
     private var remainingOfficeDays: Int {
         max(0, summary.requiredOfficeDays - summary.completedOfficeDays)
     }
@@ -221,6 +229,14 @@ struct DashboardView: View {
                         )
 
                         DSMetricTile(
+                            systemImage: "percent",
+                            label: "Compliance percentage",
+                            value: actualCompliancePercentage.formatted(.percent.precision(.fractionLength(0...1))),
+                            subtitle: "Office days / work max",
+                            statusColor: statusColor
+                        )
+
+                        DSMetricTile(
                             systemImage: "building.2",
                             label: "Completed office days",
                             value: summary.completedOfficeDays.formatted(),
@@ -265,9 +281,9 @@ struct DashboardView: View {
 
                         DSMetricTile(
                             systemImage: "calendar.badge.checkmark",
-                            label: "Adjusted eligible compliance days",
+                            label: "Work max",
                             value: summary.adjustedEligibleDays.formatted(),
-                            subtitle: "After leave"
+                            subtitle: "After holidays and leave"
                         )
 
                         DSMetricTile(

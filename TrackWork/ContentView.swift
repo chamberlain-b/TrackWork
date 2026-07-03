@@ -14,6 +14,16 @@ struct ContentView: View {
                     Label("Calendar", systemImage: "calendar")
                 }
 
+            RecordsView()
+                .tabItem {
+                    Label("Records", systemImage: "list.bullet.rectangle")
+                }
+
+            ComplianceView()
+                .tabItem {
+                    Label("Compliance", systemImage: "target")
+                }
+
             ExportView()
                 .tabItem {
                     Label("Export", systemImage: "square.and.arrow.up")

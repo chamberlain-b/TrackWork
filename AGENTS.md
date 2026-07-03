@@ -4,7 +4,7 @@ Guidance for coding agents working on Work Track.
 
 ## App Purpose
 
-Work Track is a private native SwiftUI iOS app for tracking office/home attendance and monthly hybrid-work compliance. It supports Australia and New Zealand from the MVP, uses selected jurisdiction public holidays, supports annual and sick leave, allows manual overrides and notes, and exports user-facing monthly reports.
+Work Track is a private native SwiftUI iOS app for tracking office/home attendance and hybrid-work compliance across current-month, built-in, and custom compliance periods. It supports Australia and New Zealand from the MVP, uses selected jurisdiction public holidays, supports annual and sick leave, allows manual overrides and notes, and exports user-facing compliance reports.
 
 Personal attendance data must be stored on-device by default.
 
@@ -12,7 +12,8 @@ Personal attendance data must be stored on-device by default.
 
 - Platform: native iOS, SwiftUI.
 - Minimum deployment target: iOS 27.0+.
-- Compliance period: calendar month only.
+- Compliance periods: the dashboard defaults to the current calendar month, and the compliance/records surfaces must support current month, last 30 days, previous month, current quarter, previous quarter, year to date, and valid custom date ranges.
+- Compliance trends are MVP-critical and must support monthly, quarterly, and yearly views using the same compliance rules as the dashboard and compliance screen.
 - Jurisdictions: all AU states/territories plus NZ National and listed NZ regional/provincial anniversary options.
 - Attendance concepts must remain separate:
   - detected status: inferred by the app.
@@ -37,7 +38,9 @@ Personal attendance data must be stored on-device by default.
 - Use deterministic date handling in tests.
 - Selected workdays use ISO weekdays: Monday = 1, Sunday = 7.
 - Public holiday dates use ISO `yyyy-MM-dd` in bundled holiday JSON.
-- Calculations must be month-bound for the MVP.
+- Calculations must be bounded to the selected compliance period for the MVP. Current month remains the default period, but built-in and custom ranges are required MVP behavior.
+- Built-in ranges must use deterministic inclusive start and end dates.
+- Custom date ranges must prevent or normalize invalid ranges before calculating compliance.
 - Avoid timezone-sensitive comparisons by normalizing dates for day-level logic.
 
 ## Compliance Rules
@@ -58,7 +61,7 @@ selected workdays
 - Multiple leave records on one date are capped at one full day of eligible-day impact.
 - Implement full-day leave first. Half-day leave can be added only after full-day behavior is stable and tested.
 - Percentage target: `ceil(adjustedEligibleDays * requiredPercentage)`.
-- Fixed monthly target defaults to prorating for leave:
+- Fixed period target defaults to prorating for leave:
   `ceil(baseRequiredDays * adjustedEligibleDays / baseEligibleDays)`.
 - The default setting for `prorateFixedTargetForLeave` is `true`.
 
@@ -82,7 +85,10 @@ selected workdays
   - leave on public holidays not double-reducing days.
   - multiple leave records on one date capped at one day.
   - percentage requirements using `ceil`.
-  - fixed monthly requirements with and without leave prorating.
+  - fixed-period requirements with and without leave prorating.
+  - monthly, quarterly, and yearly trend calculations using the same rules as period compliance.
+  - built-in compliance ranges including current month, last 30 days, previous month, current quarter, previous quarter, and year to date.
+  - custom date ranges with deterministic inclusive boundaries.
 - Holiday provider tests should cover bundled JSON loading, NZ regional inheritance, and typed missing-data errors.
 - Export tests should validate report snapshots and confirm default exports exclude raw location events and GPS coordinates.
 
@@ -92,7 +98,7 @@ selected workdays
 - No continuous GPS tracking.
 - No raw location export by default.
 - No raw GPS coordinate export by default.
-- No rolling, quarterly, or custom compliance periods in the MVP.
+- Do not add open-ended analytics periods beyond the MVP set unless explicitly requested. The MVP period set is current month, last 30 days, previous month, current quarter, previous quarter, year to date, and valid custom date ranges.
 - No half-day leave in the first calculator milestone.
 - No background location mode or Always permission flow until the planned location milestone.
 - No new package dependencies during early scaffold, domain, calculator, or manual-entry milestones.
