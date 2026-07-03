@@ -96,6 +96,18 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    NavigationLink {
+                        LocationSetupView()
+                    } label: {
+                        Label("Location Setup", systemImage: "location.circle")
+                    }
+                } header: {
+                    Text("Location")
+                } footer: {
+                    Text("Save home and office coordinates for later attendance detection. This does not request location permission or start tracking.")
+                }
+
+                Section {
                     Picker("Country", selection: countrySelection) {
                         ForEach(Country.allCases) { country in
                             Text(country.displayName)

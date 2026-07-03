@@ -43,6 +43,35 @@ final class Place {
     }
 }
 
+extension PlaceType {
+    var displayName: String {
+        switch self {
+        case .home:
+            "Home"
+        case .office:
+            "Office"
+        }
+    }
+
+    var defaultName: String {
+        switch self {
+        case .home:
+            "Home"
+        case .office:
+            "Office"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .home:
+            "house.fill"
+        case .office:
+            "building.2.fill"
+        }
+    }
+}
+
 extension Place {
     var type: PlaceType? {
         PlaceType(rawValue: typeRaw)
