@@ -15,7 +15,7 @@ struct DSInsightCallout: View {
                 .clipShape(Circle())
 
             if let highlightedText {
-                Text(message) + Text(" \(highlightedText)").fontWeight(.semibold)
+                Text("\(Text(message)) \(Text(highlightedText).fontWeight(.semibold))")
             } else {
                 Text(message)
             }

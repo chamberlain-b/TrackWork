@@ -50,7 +50,7 @@ final class CSVExportServiceTests: XCTestCase {
     }
 
     func testGeneratedFilenameUsesReportMonth() {
-        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "WorkTrack_2026-07.csv")
+        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "Work Track 2026-07 Monthly Report.csv")
     }
 
     private func snapshot(includeNotes: Bool) -> ReportSnapshot {

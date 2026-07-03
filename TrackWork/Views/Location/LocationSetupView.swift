@@ -7,7 +7,7 @@ struct LocationSetupView: View {
     @Environment(\.openURL) private var openURL
     @Environment(LocationTrackingService.self) private var locationTrackingService
     @Query(sort: \Place.typeRaw) private var places: [Place]
-    @State private var locationAuthorizationService = LocationAuthorizationService(automaticBackgroundTrackingEnabled: true)
+    @State private var locationAuthorizationService = LocationAuthorizationService()
 
     private var homePlace: Place? {
         place(for: .home)
@@ -48,14 +48,14 @@ struct LocationSetupView: View {
                 Button {
                     locationAuthorizationService.requestAlwaysAuthorizationIfAvailable()
                 } label: {
-                    Label("Allow Background Location", systemImage: "location.fill")
+                    Label("Background Location Not Enabled", systemImage: "location.fill")
                 }
                 .disabled(!locationAuthorizationService.canRequestAlwaysAuthorization || locationAuthorizationService.isRequestingAuthorization)
                 .accessibilityIdentifier("locationAuthorization.requestAlways")
             } header: {
                 Text("Background Access")
             } footer: {
-                Text("Background location access lets iOS deliver home and office geofence events when Work Track is not open. This uses region monitoring, not continuous GPS.")
+                Text("Background location is intentionally unavailable in this MVP build. Work Track can still use saved places for foreground setup and manual attendance remains available.")
             }
 
             Section {
@@ -107,6 +107,7 @@ struct LocationSetupView: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("Location permission: \(statusTitle). \(statusDescription)")
         .accessibilityIdentifier("locationAuthorization.status")
     }
 
@@ -144,9 +145,9 @@ struct LocationSetupView: View {
         case .denied:
             "Location access is off for Work Track. You can change this later in iOS Settings."
         case .authorizedAlways:
-            "Work Track can use location in the background, but automatic tracking is not active yet."
+            "Work Track has Always permission from iOS, but this MVP build does not enable background tracking."
         case .authorizedWhenInUse:
-            "Work Track can use location while the app is open. Background tracking has a separate later step."
+            "Work Track can use location while the app is open. Background tracking is unavailable in this MVP build."
         @unknown default:
             "Work Track cannot identify the current location permission state."
         }
@@ -217,6 +218,7 @@ struct LocationSetupView: View {
             }
             .padding(.vertical, 4)
         }
+        .accessibilityLabel("\(placeType.displayName): \(summary(for: place))")
         .accessibilityIdentifier("locationSetup.\(placeType.rawValue)")
     }
 
@@ -226,7 +228,7 @@ struct LocationSetupView: View {
 
     private func summary(for place: Place?) -> String {
         guard let place else {
-            return "Not set"
+            return "Not configured"
         }
 
         return "\(place.latitude.formatted(.number.precision(.fractionLength(4)))), \(place.longitude.formatted(.number.precision(.fractionLength(4)))) - \(place.radiusMeters.formatted(.number.precision(.fractionLength(0)))) m"

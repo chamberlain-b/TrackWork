@@ -56,7 +56,7 @@ final class PDFExportServiceTests: XCTestCase {
     }
 
     func testGeneratedFilenameUsesReportMonth() {
-        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "WorkTrack_2026-07.pdf")
+        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "Work Track 2026-07 Monthly Report.pdf")
     }
 
     private func extractedText(from data: Data) throws -> String {

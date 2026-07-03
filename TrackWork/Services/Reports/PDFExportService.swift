@@ -35,7 +35,7 @@ struct PDFExportService {
             monthIdentifier = monthFormatter.string(from: snapshot.summary.periodStart)
         }
 
-        return "WorkTrack_\(monthIdentifier).pdf"
+        return "Work Track \(monthIdentifier) Monthly Report.pdf"
     }
 
     private func drawReport(_ snapshot: ReportSnapshot, in context: inout PDFLayoutContext) {

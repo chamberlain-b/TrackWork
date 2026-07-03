@@ -58,7 +58,7 @@ struct ExportView: View {
                             )
                             .datePickerStyle(.compact)
 
-                            Toggle("Include notes", isOn: $includeNotes)
+                            Toggle("Include notes in export", isOn: $includeNotes)
                                 .tint(Color.ds.accentPrimary)
 
                             HStack(spacing: AppSpacing.sm) {
@@ -94,6 +94,7 @@ struct ExportView: View {
                                         .background(Color.ds.accentPrimary)
                                         .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
                                 }
+                                .accessibilityLabel("Share \(generatedExportKind.label) report named \(generatedFileName)")
                             }
                         }
                     }

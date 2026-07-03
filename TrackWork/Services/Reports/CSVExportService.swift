@@ -33,7 +33,7 @@ struct CSVExportService {
             monthIdentifier = monthFormatter.string(from: snapshot.summary.periodStart)
         }
 
-        return "WorkTrack_\(monthIdentifier).csv"
+        return "Work Track \(monthIdentifier) Monthly Report.csv"
     }
 
     private func appendSection(_ title: String, rows: [[String]], to lines: inout [String]) {
