@@ -180,10 +180,41 @@ final class LocationTrackingService: NSObject {
         modelContext.insert(event)
 
         do {
+            try recalculateAttendance(for: event, in: modelContext)
             try modelContext.save()
         } catch {
             trackingStatus = .failed("Location event could not be saved.")
         }
+    }
+
+    private func recalculateAttendance(for event: LocationEvent, in modelContext: ModelContext) throws {
+        let calendar = Calendar.current
+        let affectedDate = calendar.startOfDay(for: event.occurredAt)
+        var attendanceDays = try modelContext.fetch(FetchDescriptor<AttendanceDay>())
+
+        if !attendanceDays.contains(where: { calendar.startOfDay(for: $0.date) == affectedDate }) {
+            let attendanceDay = AttendanceDay(date: affectedDate)
+            modelContext.insert(attendanceDay)
+            attendanceDays.append(attendanceDay)
+        }
+
+        let locationEvents = try modelContext.fetch(FetchDescriptor<LocationEvent>())
+        let leaveRecords = try modelContext.fetch(FetchDescriptor<LeaveRecord>())
+        let publicHolidays = try modelContext.fetch(FetchDescriptor<PublicHoliday>())
+        let rule = try modelContext.fetch(FetchDescriptor<ComplianceRule>()).first
+        let inferenceService = AttendanceInferenceService(
+            calendar: calendar,
+            minimumOfficeMinutes: rule?.minimumOfficeMinutes ?? 180
+        )
+
+        inferenceService.recalculateAttendanceDays(
+            attendanceDays,
+            affectedDates: [affectedDate],
+            events: locationEvents,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            selectedISOWeekdays: Set(rule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
+        )
     }
 
     private func permissionMessage(for authorizationStatus: CLAuthorizationStatus) -> String {
