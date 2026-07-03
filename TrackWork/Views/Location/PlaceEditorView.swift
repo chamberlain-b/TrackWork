@@ -1,3 +1,4 @@
+import MapKit
 import SwiftData
 import SwiftUI
 
@@ -13,6 +14,7 @@ struct PlaceEditorView: View {
     @State private var latitudeText: String
     @State private var longitudeText: String
     @State private var radiusMeters: Double
+    @State private var isShowingMapPicker = false
     @State private var saveError: String?
 
     private let radiusOptions = [50.0, 100.0, 150.0, 200.0, 300.0, 500.0]
@@ -43,10 +45,17 @@ struct PlaceEditorView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("placeEditor.longitude")
+
+                Button {
+                    isShowingMapPicker = true
+                } label: {
+                    Label("Choose on Map", systemImage: "map")
+                }
+                .accessibilityIdentifier("placeEditor.chooseOnMap")
             } header: {
                 Text("Coordinates")
             } footer: {
-                Text("Enter decimal coordinates manually for now. This does not request location access or start tracking.")
+                Text("Enter decimal coordinates manually or choose them on the map. This does not request location access or start tracking.")
             }
 
             Section {
@@ -75,6 +84,17 @@ struct PlaceEditorView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     savePlace()
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingMapPicker) {
+            NavigationStack {
+                MapPickerView(
+                    placeType: placeType,
+                    initialCoordinate: selectedCoordinate,
+                    radiusMeters: radiusMeters
+                ) { coordinate in
+                    applySelectedCoordinate(coordinate)
                 }
             }
         }
@@ -126,6 +146,25 @@ struct PlaceEditorView: View {
         } catch {
             saveError = "Place could not be saved. Try again."
         }
+    }
+
+    private var selectedCoordinate: CLLocationCoordinate2D? {
+        guard
+            let latitude = coordinate(from: latitudeText),
+            let longitude = coordinate(from: longitudeText),
+            (-90...90).contains(latitude),
+            (-180...180).contains(longitude)
+        else {
+            return nil
+        }
+
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    private func applySelectedCoordinate(_ coordinate: CLLocationCoordinate2D) {
+        latitudeText = Self.formattedCoordinate(coordinate.latitude)
+        longitudeText = Self.formattedCoordinate(coordinate.longitude)
+        saveError = nil
     }
 
     private func coordinate(from text: String) -> Double? {
