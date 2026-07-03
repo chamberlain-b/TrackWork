@@ -283,6 +283,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses background location events to automatically record office and home attendance after you enable automatic tracking.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -323,6 +325,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses background location events to automatically record office and home attendance after you enable automatic tracking.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
