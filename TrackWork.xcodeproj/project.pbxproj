@@ -12,6 +12,7 @@
 		5F8A72A82FF67F1B00DC4D9E /* AttendanceEnumTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceEnumTests.swift; sourceTree = "<group>"; };
 		5F8A72AB2FF680D200DC4D9E /* ComplianceCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplianceCalculatorTests.swift; sourceTree = "<group>"; };
 		5F8A72CB2FF6872000DC4D9E /* LocalJSONHolidayProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalJSONHolidayProviderTests.swift; sourceTree = "<group>"; };
+		5F8A72D22FF7396000DC4D9E /* ReportSnapshotBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportSnapshotBuilderTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +56,7 @@
 				5F8A72A82FF67F1B00DC4D9E /* AttendanceEnumTests.swift */,
 				5F8A72AB2FF680D200DC4D9E /* ComplianceCalculatorTests.swift */,
 				5F8A72CB2FF6872000DC4D9E /* LocalJSONHolidayProviderTests.swift */,
+				5F8A72D22FF7396000DC4D9E /* ReportSnapshotBuilderTests.swift */,
 			);
 			path = TrackWorkTests;
 			sourceTree = "<group>";
