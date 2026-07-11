@@ -6,34 +6,48 @@ struct RecordsView: View {
     @Query(sort: \LeaveRecord.date, order: .reverse) private var leaveRecords: [LeaveRecord]
     @Query(sort: \ManualAdjustment.updatedAt, order: .reverse) private var manualAdjustments: [ManualAdjustment]
     @Query(sort: \PublicHoliday.date, order: .reverse) private var publicHolidays: [PublicHoliday]
+    @Query(sort: \CustomExcludedDay.date, order: .reverse) private var customExcludedDays: [CustomExcludedDay]
+    @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
-    @State private var selectedFilter: RecordsFilter = .currentMonth
+    @State private var selectedFilter: CompliancePeriodPreset = .currentMonth
+    @State private var customRangeStart: Date = .now
+    @State private var customRangeEnd: Date = .now
 
     private let calendar = Calendar.recordsCalendar
 
     private var filteredRecords: [RecordRow] {
-        let range = selectedFilter.dateRange(calendar: calendar, now: .now)
+        let range = selectedFilter.dateRange(
+            calendar: calendar,
+            now: .now,
+            customStart: customRangeStart,
+            customEnd: customRangeEnd
+        )
         let attendanceByDate = Dictionary(grouping: attendanceDays) { calendar.startOfDay(for: $0.date) }
         let leaveByDate = Dictionary(grouping: leaveRecords) { calendar.startOfDay(for: $0.date) }
-        let holidaysByDate = Dictionary(grouping: publicHolidays) { calendar.startOfDay(for: $0.date) }
-        let adjustmentByAttendanceId = Dictionary(uniqueKeysWithValues: manualAdjustments.map { ($0.attendanceDayId, $0) })
+        let activeJurisdictionId = complianceRules.first?.jurisdictionId ?? "AU-VIC"
+        let applicableHolidays = publicHolidays.filter { holiday in
+            holiday.jurisdictionId == activeJurisdictionId
+        }
+        let holidaysByDate = Dictionary(grouping: applicableHolidays) { calendar.startOfDay(for: $0.date) }
+        let exclusionsByDate = Dictionary(grouping: customExcludedDays) { calendar.startOfDay(for: $0.date) }
+        let adjustmentByAttendanceId = Dictionary(
+            uniqueKeysWithValues: manualAdjustments.map { ($0.attendanceDayId, $0) }
+        )
         let allDates = Set(attendanceByDate.keys)
             .union(leaveByDate.keys)
             .union(holidaysByDate.keys)
+            .union(exclusionsByDate.keys)
 
         return allDates
             .filter { date in
-                guard let range else {
-                    return true
-                }
-
-                return date >= range.start && date <= range.end
+                range.contains(date, calendar: calendar)
             }
             .sorted(by: >)
             .map { date in
                 let attendanceDay = attendanceByDate[date]?.first
                 let leaveRecord = leaveByDate[date]?.first
                 let publicHoliday = holidaysByDate[date]?.first
+                let customExcludedDay = exclusionsByDate[date]?.first
                 let adjustment = attendanceDay.flatMap { adjustmentByAttendanceId[$0.id] }
 
                 return RecordRow(
@@ -41,6 +55,7 @@ struct RecordsView: View {
                     attendanceDay: attendanceDay,
                     leaveRecord: leaveRecord,
                     publicHoliday: publicHoliday,
+                    customExcludedDay: customExcludedDay,
                     manualAdjustment: adjustment
                 )
             }
@@ -50,13 +65,12 @@ struct RecordsView: View {
         NavigationStack {
             List {
                 Section {
-                    Picker("Range", selection: $selectedFilter) {
-                        ForEach(RecordsFilter.allCases) { filter in
-                            Text(filter.displayName)
-                                .tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    CompliancePeriodControls(
+                        selectedPreset: $selectedFilter,
+                        customStart: $customRangeStart,
+                        customEnd: $customRangeEnd,
+                        accessibilityPrefix: "records"
+                    )
                 }
 
                 Section {
@@ -64,7 +78,7 @@ struct RecordsView: View {
                         DSEmptyState(
                             systemImage: "tray",
                             title: "No records",
-                            message: "Attendance, leave, override, and holiday records for this range will appear here."
+                            message: "Attendance, leave, overrides, holidays, and custom exclusions for this range will appear here."
                         )
                         .listRowBackground(Color.clear)
                     } else {
@@ -84,45 +98,13 @@ struct RecordsView: View {
     }
 }
 
-private enum RecordsFilter: String, CaseIterable, Identifiable {
-    case currentMonth
-    case last30Days
-    case all
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .currentMonth:
-            "Month"
-        case .last30Days:
-            "30 days"
-        case .all:
-            "All"
-        }
-    }
-
-    func dateRange(calendar: Calendar, now: Date) -> (start: Date, end: Date)? {
-        let today = calendar.startOfDay(for: now)
-
-        switch self {
-        case .currentMonth:
-            return (calendar.monthStart(for: today), calendar.monthEnd(for: today))
-        case .last30Days:
-            let start = calendar.date(byAdding: .day, value: -29, to: today) ?? today
-            return (start, today)
-        case .all:
-            return nil
-        }
-    }
-}
-
 private struct RecordRow: Identifiable {
     let id: Date
     let date: Date
     let attendanceDay: AttendanceDay?
     let leaveRecord: LeaveRecord?
     let publicHoliday: PublicHoliday?
+    let customExcludedDay: CustomExcludedDay?
     let manualAdjustment: ManualAdjustment?
 
     init(
@@ -130,6 +112,7 @@ private struct RecordRow: Identifiable {
         attendanceDay: AttendanceDay?,
         leaveRecord: LeaveRecord?,
         publicHoliday: PublicHoliday?,
+        customExcludedDay: CustomExcludedDay?,
         manualAdjustment: ManualAdjustment?
     ) {
         self.id = date
@@ -137,6 +120,7 @@ private struct RecordRow: Identifiable {
         self.attendanceDay = attendanceDay
         self.leaveRecord = leaveRecord
         self.publicHoliday = publicHoliday
+        self.customExcludedDay = customExcludedDay
         self.manualAdjustment = manualAdjustment
     }
 
@@ -149,6 +133,10 @@ private struct RecordRow: Identifiable {
             return AttendanceClassification.publicHoliday.displayName
         }
 
+        if customExcludedDay != nil {
+            return "Excluded"
+        }
+
         return attendanceDay?.finalClassification?.displayName ?? AttendanceClassification.unknown.displayName
     }
 
@@ -157,7 +145,7 @@ private struct RecordRow: Identifiable {
     }
 
     var note: String? {
-        leaveRecord?.note ?? manualAdjustment?.note ?? attendanceDay?.note
+        leaveRecord?.note ?? customExcludedDay?.reason ?? manualAdjustment?.note ?? attendanceDay?.note
     }
 }
 
@@ -198,6 +186,10 @@ private struct RecordRowView: View {
                 if record.publicHoliday != nil {
                     DSStatusPill(text: "Public holiday", systemImage: "sparkles", style: .neutral)
                 }
+
+                if record.customExcludedDay != nil {
+                    DSStatusPill(text: "Custom exclusion", systemImage: "calendar.badge.minus", style: .neutral)
+                }
             }
 
             if let note = record.note, !note.isEmpty {
@@ -218,6 +210,10 @@ private struct RecordRowView: View {
 
         if record.publicHoliday != nil {
             return "sparkles"
+        }
+
+        if record.customExcludedDay != nil {
+            return "calendar.badge.minus"
         }
 
         switch record.attendanceDay?.finalClassification ?? .unknown {
@@ -247,6 +243,10 @@ private struct RecordRowView: View {
             return .neutral
         }
 
+        if record.customExcludedDay != nil {
+            return .neutral
+        }
+
         switch record.attendanceDay?.finalClassification ?? .unknown {
         case .office:
             return .success
@@ -269,20 +269,6 @@ private extension Calendar {
         calendar.timeZone = .autoupdatingCurrent
         calendar.firstWeekday = 2
         return calendar
-    }
-
-    func monthStart(for date: Date) -> Date {
-        dateInterval(of: .month, for: date)?.start ?? startOfDay(for: date)
-    }
-
-    func monthEnd(for date: Date) -> Date {
-        guard let monthInterval = dateInterval(of: .month, for: date),
-              let finalDate = self.date(byAdding: .day, value: -1, to: monthInterval.end)
-        else {
-            return startOfDay(for: date)
-        }
-
-        return startOfDay(for: finalDate)
     }
 }
 

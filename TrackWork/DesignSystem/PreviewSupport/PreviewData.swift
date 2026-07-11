@@ -161,6 +161,18 @@ enum PreviewData {
         ]
     }
 
+    static var customExcludedDays: [CustomExcludedDay] {
+        [
+            CustomExcludedDay(
+                id: fixedUUID("50000000-0000-0000-0000-000000000001"),
+                date: date(year: 2026, month: 7, day: 13),
+                reason: "Company-wide closure",
+                createdAt: referenceTimestamp,
+                updatedAt: referenceTimestamp
+            )
+        ]
+    }
+
     @MainActor
     static func modelContainer() -> ModelContainer {
         let schema = Schema([
@@ -168,6 +180,7 @@ enum PreviewData {
             LeaveRecord.self,
             ManualAdjustment.self,
             ComplianceRule.self,
+            CustomExcludedDay.self,
             Place.self,
             LocationEvent.self,
             PublicHoliday.self
@@ -189,6 +202,7 @@ enum PreviewData {
         leaveRecords.forEach(context.insert)
         context.insert(defaultComplianceRule)
         publicHolidays.forEach(context.insert)
+        customExcludedDays.forEach(context.insert)
     }
 
     private static let referenceTimestamp = date(year: 2026, month: 7, day: 1)

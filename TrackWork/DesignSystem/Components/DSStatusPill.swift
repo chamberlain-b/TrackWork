@@ -29,6 +29,8 @@ enum DSStatusPillStyle: CaseIterable {
 }
 
 struct DSStatusPill: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let text: String
     var systemImage: String?
     var style: DSStatusPillStyle = .neutral
@@ -37,22 +39,30 @@ struct DSStatusPill: View {
         Label {
             Text(text)
                 .font(AppTypography.captionStrong)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(Color.ds.textPrimary)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.caption2.weight(.semibold))
+                    .foregroundStyle(style.foreground)
             }
         }
-        .foregroundStyle(style.foreground)
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)
-        .background(style.background, in: Capsule(style: .continuous))
+        .background(
+            style.background,
+            in: RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
+        )
         .overlay {
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
                 .stroke(style.foreground.opacity(0.16), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var pillCornerRadius: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? AppRadius.md : AppRadius.pill
     }
 }

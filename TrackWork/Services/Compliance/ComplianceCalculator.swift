@@ -41,6 +41,7 @@ struct BusinessDayCalculator {
 struct ComplianceSummary: Equatable {
     let baseEligibleDays: Int
     let adjustedEligibleDays: Int
+    let customExcludedDays: Int
     let requiredOfficeDays: Int
     let completedOfficeDays: Int
     let reviewRequiredDays: Int
@@ -54,8 +55,37 @@ struct ComplianceCalculator {
         let selectedISOWeekdays: Set<Int>
         let publicHolidays: Set<Date>
         let leaveRecords: [LeaveRecord]
+        let customExcludedDates: Set<Date>
         let attendanceDays: [AttendanceDay]
         let requirement: Requirement
+        let minimumOfficeMinutes: Int
+        let evaluationDate: Date?
+
+        init(
+            periodStart: Date,
+            periodEnd: Date,
+            calendar: Calendar,
+            selectedISOWeekdays: Set<Int>,
+            publicHolidays: Set<Date>,
+            leaveRecords: [LeaveRecord],
+            customExcludedDates: Set<Date> = [],
+            attendanceDays: [AttendanceDay],
+            requirement: Requirement,
+            minimumOfficeMinutes: Int = 180,
+            evaluationDate: Date? = nil
+        ) {
+            self.periodStart = periodStart
+            self.periodEnd = periodEnd
+            self.calendar = calendar
+            self.selectedISOWeekdays = selectedISOWeekdays
+            self.publicHolidays = publicHolidays
+            self.leaveRecords = leaveRecords
+            self.customExcludedDates = customExcludedDates
+            self.attendanceDays = attendanceDays
+            self.requirement = requirement
+            self.minimumOfficeMinutes = minimumOfficeMinutes
+            self.evaluationDate = evaluationDate
+        }
     }
 
     struct LeaveRecord {
@@ -77,8 +107,6 @@ struct ComplianceCalculator {
 
     typealias Summary = ComplianceSummary
 
-    private let officeDayMinimumMinutes = 180
-
     func calculate(_ input: Input) -> Summary {
         let businessDayCalculator = BusinessDayCalculator()
         let eligibleDates = businessDayCalculator.eligibleDates(
@@ -95,7 +123,16 @@ struct ComplianceCalculator {
             eligibleDates: eligibleDates,
             calendar: input.calendar
         )
-        let adjustedEligibleDays = max(0, baseEligibleDays - leaveAdjustedDates.count)
+        let eligibleCustomExcludedDates = Set(
+            input.customExcludedDates
+                .map { input.calendar.startOfDay(for: $0) }
+                .filter(eligibleDates.contains)
+        )
+        let effectiveCustomExcludedDates = eligibleCustomExcludedDates.subtracting(leaveAdjustedDates)
+        let adjustedEligibleDates = eligibleDates
+            .subtracting(leaveAdjustedDates)
+            .subtracting(effectiveCustomExcludedDates)
+        let adjustedEligibleDays = adjustedEligibleDates.count
         let requiredOfficeDays = requiredOfficeDays(
             for: input.requirement,
             baseEligibleDays: baseEligibleDays,
@@ -103,13 +140,22 @@ struct ComplianceCalculator {
         )
         let completedOfficeDays = completedOfficeDays(
             from: input.attendanceDays,
+            eligibleDates: adjustedEligibleDates,
+            minimumOfficeMinutes: input.minimumOfficeMinutes,
+            evaluationDate: input.evaluationDate,
             calendar: input.calendar
         )
-        let reviewRequiredDays = reviewRequiredDays(from: input.attendanceDays)
+        let reviewRequiredDays = reviewRequiredDays(
+            from: input.attendanceDays,
+            eligibleDates: adjustedEligibleDates,
+            evaluationDate: input.evaluationDate,
+            calendar: input.calendar
+        )
 
         return Summary(
             baseEligibleDays: baseEligibleDays,
             adjustedEligibleDays: adjustedEligibleDays,
+            customExcludedDays: effectiveCustomExcludedDates.count,
             requiredOfficeDays: requiredOfficeDays,
             completedOfficeDays: completedOfficeDays,
             reviewRequiredDays: reviewRequiredDays
@@ -121,7 +167,7 @@ struct ComplianceCalculator {
         eligibleDates: Set<Date>,
         calendar: Calendar
     ) -> Set<Date> {
-        Set(
+        return Set<Date>(
             leaveRecords.compactMap { leaveRecord in
                 guard leaveRecord.duration == .fullDay else {
                     return nil
@@ -156,23 +202,63 @@ struct ComplianceCalculator {
 
     private func completedOfficeDays(
         from attendanceDays: [AttendanceDay],
+        eligibleDates: Set<Date>,
+        minimumOfficeMinutes: Int,
+        evaluationDate: Date?,
         calendar: Calendar
     ) -> Int {
-        Set(
+        let normalizedEvaluationDate = evaluationDate.map { calendar.startOfDay(for: $0) }
+
+        return Set<Date>(
             attendanceDays.compactMap { attendanceDay in
-                switch attendanceDay.finalClassification {
-                case .office:
-                    return calendar.startOfDay(for: attendanceDay.date)
-                case .mixed where attendanceDay.officeMinutes >= officeDayMinimumMinutes:
-                    return calendar.startOfDay(for: attendanceDay.date)
-                default:
+                let normalizedDate = calendar.startOfDay(for: attendanceDay.date)
+                guard eligibleDates.contains(normalizedDate),
+                      normalizedEvaluationDate.map({ normalizedDate <= $0 }) ?? true else {
                     return nil
                 }
+
+                let treatment = ComplianceTreatmentResolver.resolve(
+                    classification: attendanceDay.finalClassification,
+                    officeMinutes: attendanceDay.officeMinutes,
+                    minimumOfficeMinutes: minimumOfficeMinutes
+                )
+                return treatment == .countsAsOffice ? normalizedDate : nil
             }
         ).count
     }
 
-    private func reviewRequiredDays(from attendanceDays: [AttendanceDay]) -> Int {
-        attendanceDays.filter { $0.finalClassification == .unknown }.count
+    private func reviewRequiredDays(
+        from attendanceDays: [AttendanceDay],
+        eligibleDates: Set<Date>,
+        evaluationDate: Date?,
+        calendar: Calendar
+    ) -> Int {
+        guard let evaluationDate else {
+            return Set<Date>(
+                attendanceDays.compactMap { attendanceDay in
+                    guard attendanceDay.finalClassification == .unknown else {
+                        return nil
+                    }
+
+                    let normalizedDate = calendar.startOfDay(for: attendanceDay.date)
+                    return eligibleDates.contains(normalizedDate) ? normalizedDate : nil
+                }
+            ).count
+        }
+
+        let normalizedEvaluationDate = calendar.startOfDay(for: evaluationDate)
+        let reviewableDates = Set(eligibleDates.filter { $0 < normalizedEvaluationDate })
+        let resolvedDates = Set<Date>(
+            attendanceDays.compactMap { attendanceDay in
+                guard attendanceDay.finalClassification != .unknown else {
+                    return nil
+                }
+
+                let normalizedDate = calendar.startOfDay(for: attendanceDay.date)
+                return reviewableDates.contains(normalizedDate) ? normalizedDate : nil
+            }
+        )
+
+        return reviewableDates.subtracting(resolvedDates).count
     }
 }

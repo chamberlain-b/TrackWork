@@ -24,6 +24,7 @@ struct AttendanceInferenceService {
         periodEnd: Date,
         leaveRecords: [LeaveRecord] = [],
         publicHolidays: [PublicHoliday] = [],
+        customExcludedDays: [CustomExcludedDay] = [],
         selectedISOWeekdays: Set<Int> = [1, 2, 3, 4, 5]
     ) -> [DailyInference] {
         let normalizedPeriodStart = calendar.startOfDay(for: periodStart)
@@ -39,6 +40,7 @@ struct AttendanceInferenceService {
         )
         let leaveByDate = leaveClassificationByDate(from: leaveRecords)
         let publicHolidayDates = Set(publicHolidays.map { calendar.startOfDay(for: $0.date) })
+        let customExcludedDates = Set(customExcludedDays.map { calendar.startOfDay(for: $0.date) })
 
         return dates(from: normalizedPeriodStart, through: normalizedPeriodEnd).map { date in
             let totals = minuteTotals[date] ?? MinuteTotals()
@@ -50,6 +52,7 @@ struct AttendanceInferenceService {
                 for: date,
                 leaveByDate: leaveByDate,
                 publicHolidayDates: publicHolidayDates,
+                customExcludedDates: customExcludedDates,
                 selectedISOWeekdays: selectedISOWeekdays
             )
             let finalClassification = exclusionClassification ?? detectedClassification
@@ -60,7 +63,11 @@ struct AttendanceInferenceService {
                 homeMinutes: totals.homeMinutes,
                 detectedClassification: detectedClassification,
                 finalClassification: finalClassification,
-                complianceTreatment: complianceTreatment(for: finalClassification)
+                complianceTreatment: ComplianceTreatmentResolver.resolve(
+                    classification: finalClassification,
+                    officeMinutes: totals.officeMinutes,
+                    minimumOfficeMinutes: minimumOfficeMinutes
+                )
             )
         }
     }
@@ -72,6 +79,7 @@ struct AttendanceInferenceService {
         events: [LocationEvent],
         leaveRecords: [LeaveRecord] = [],
         publicHolidays: [PublicHoliday] = [],
+        customExcludedDays: [CustomExcludedDay] = [],
         selectedISOWeekdays: Set<Int> = [1, 2, 3, 4, 5],
         updatedAt: Date = .now
     ) -> Set<Date> {
@@ -93,9 +101,11 @@ struct AttendanceInferenceService {
                 periodEnd: periodEnd,
                 leaveRecords: leaveRecords,
                 publicHolidays: publicHolidays,
+                customExcludedDays: customExcludedDays,
                 selectedISOWeekdays: selectedISOWeekdays
             ).map { ($0.date, $0) }
         )
+        let customExcludedDates = Set(customExcludedDays.map { calendar.startOfDay(for: $0.date) })
 
         for attendanceDay in attendanceDays {
             let date = calendar.startOfDay(for: attendanceDay.date)
@@ -108,11 +118,25 @@ struct AttendanceInferenceService {
             attendanceDay.officeMinutes = inference.officeMinutes
             attendanceDay.homeMinutes = inference.homeMinutes
 
-            if attendanceDay.manualClassification == nil {
+            let isCustomExcluded = customExcludedDates.contains(date)
+            if isCustomExcluded {
+                attendanceDay.finalClassificationRaw = AttendanceClassification.nonWorkingDay.rawValue
+            } else if let manualClassification = attendanceDay.manualClassification {
+                attendanceDay.finalClassificationRaw = manualClassification.rawValue
+            } else {
                 attendanceDay.finalClassificationRaw = inference.finalClassification.rawValue
             }
 
-            attendanceDay.complianceTreatmentRaw = inference.complianceTreatment.rawValue
+            if isCustomExcluded {
+                attendanceDay.complianceTreatmentRaw = ComplianceTreatment.excludedFromRequirement.rawValue
+            } else {
+                let finalClassification = attendanceDay.finalClassification ?? inference.finalClassification
+                attendanceDay.complianceTreatmentRaw = ComplianceTreatmentResolver.resolve(
+                    classification: finalClassification,
+                    officeMinutes: inference.officeMinutes,
+                    minimumOfficeMinutes: minimumOfficeMinutes
+                ).rawValue
+            }
             attendanceDay.updatedAt = updatedAt
         }
 
@@ -233,8 +257,13 @@ struct AttendanceInferenceService {
         for date: Date,
         leaveByDate: [Date: AttendanceClassification],
         publicHolidayDates: Set<Date>,
+        customExcludedDates: Set<Date>,
         selectedISOWeekdays: Set<Int>
     ) -> AttendanceClassification? {
+        if customExcludedDates.contains(date) {
+            return .nonWorkingDay
+        }
+
         if publicHolidayDates.contains(date) {
             return .publicHoliday
         }
@@ -266,19 +295,6 @@ struct AttendanceInferenceService {
         }
 
         return classificationsByDate
-    }
-
-    private func complianceTreatment(for classification: AttendanceClassification) -> ComplianceTreatment {
-        switch classification {
-        case .office:
-            .countsAsOffice
-        case .home, .mixed:
-            .countsAsHome
-        case .annualLeave, .sickLeave, .publicHoliday, .weekend, .nonWorkingDay:
-            .excludedFromRequirement
-        case .unknown:
-            .requiresReview
-        }
     }
 
     private func dates(from periodStart: Date, through periodEnd: Date) -> [Date] {

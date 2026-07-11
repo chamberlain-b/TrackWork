@@ -2,6 +2,7 @@ import Foundation
 
 final class LocalJSONHolidayProvider: HolidayProvider {
     private let bundle: Bundle
+    private let fixtureData: [String: Data]?
     private let decoder: JSONDecoder
     private let calendar: Calendar
 
@@ -11,15 +12,35 @@ final class LocalJSONHolidayProvider: HolidayProvider {
         calendar: Calendar = HolidayDateParser.calendar
     ) {
         self.bundle = bundle
+        self.fixtureData = nil
+        self.decoder = decoder
+        self.calendar = calendar
+    }
+
+    init(
+        fixtureData: [String: Data],
+        decoder: JSONDecoder = JSONDecoder(),
+        calendar: Calendar = HolidayDateParser.calendar
+    ) {
+        self.bundle = .main
+        self.fixtureData = fixtureData
         self.decoder = decoder
         self.calendar = calendar
     }
 
     func holidays(for country: Country, jurisdictionId: String, year: Int) throws -> [PublicHoliday] {
+        guard JurisdictionCatalog.jurisdictions(for: country).contains(where: { $0.id == jurisdictionId }) else {
+            throw HolidayProviderError.unsupportedJurisdiction(
+                countryCode: country.rawValue,
+                jurisdictionId: jurisdictionId
+            )
+        }
+
         var visitedJurisdictions = Set<String>()
         let entries = try resolvedEntries(
             for: country,
             jurisdictionId: jurisdictionId,
+            effectiveJurisdictionId: jurisdictionId,
             year: year,
             visitedJurisdictions: &visitedJurisdictions
         )
@@ -52,6 +73,7 @@ final class LocalJSONHolidayProvider: HolidayProvider {
     private func resolvedEntries(
         for country: Country,
         jurisdictionId: String,
+        effectiveJurisdictionId: String,
         year: Int,
         visitedJurisdictions: inout Set<String>
     ) throws -> [ResolvedHolidayEntry] {
@@ -70,6 +92,7 @@ final class LocalJSONHolidayProvider: HolidayProvider {
                 contentsOf: try resolvedEntries(
                     for: country,
                     jurisdictionId: inheritedJurisdictionId,
+                    effectiveJurisdictionId: effectiveJurisdictionId,
                     year: year,
                     visitedJurisdictions: &visitedJurisdictions
                 )
@@ -86,10 +109,10 @@ final class LocalJSONHolidayProvider: HolidayProvider {
                 date: calendar.startOfDay(for: date),
                 name: entry.name,
                 country: country,
-                jurisdictionId: fixture.jurisdictionCode,
-                isRegional: !fixture.inheritsFrom.isEmpty,
-                sourceName: entry.sourceName,
-                sourceURL: entry.sourceURL
+                jurisdictionId: effectiveJurisdictionId,
+                isRegional: fixture.jurisdictionCode != "NZ-NATIONAL" && country == .newZealand,
+                sourceName: entry.sourceName ?? fixture.sourceName,
+                sourceURL: entry.sourceURL ?? fixture.sourceURL
             )
         })
 
@@ -99,12 +122,21 @@ final class LocalJSONHolidayProvider: HolidayProvider {
 
     private func loadFixture(for country: Country, jurisdictionId: String, year: Int) throws -> HolidayFixture {
         let fileName = fileName(for: jurisdictionId, year: year)
-        guard let url = bundle.url(forResource: fileName, withExtension: "json") else {
-            throw HolidayProviderError.missingFile(fileName: fileName)
-        }
 
         do {
-            let data = try Data(contentsOf: url)
+            let data: Data
+            if let fixtureData {
+                guard let injectedData = fixtureData[fileName] else {
+                    throw HolidayProviderError.missingFile(fileName: fileName)
+                }
+                data = injectedData
+            } else {
+                guard let url = bundle.url(forResource: fileName, withExtension: "json") else {
+                    throw HolidayProviderError.missingFile(fileName: fileName)
+                }
+                data = try Data(contentsOf: url)
+            }
+
             let fixture = try decoder.decode(HolidayFixture.self, from: data)
             try validate(fixture, expectedCountry: country, expectedJurisdictionId: jurisdictionId, expectedYear: year, fileName: fileName)
             return fixture
@@ -137,6 +169,79 @@ final class LocalJSONHolidayProvider: HolidayProvider {
         guard fixture.year == expectedYear else {
             throw HolidayProviderError.invalidData(fileName: fileName, reason: "Expected year \(expectedYear), found \(fixture.year).")
         }
+
+        guard fixture.verifiedExhaustive else {
+            throw HolidayProviderError.unverifiedFile(fileName: fileName)
+        }
+
+        guard !fixture.sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              isValidSourceURL(fixture.sourceURL)
+        else {
+            throw HolidayProviderError.invalidData(fileName: fileName, reason: "The fixture source metadata is missing or invalid.")
+        }
+
+        let expectedJurisdiction = JurisdictionCatalog.all.first { $0.id == expectedJurisdictionId }
+        guard expectedJurisdiction?.country == expectedCountry else {
+            throw HolidayProviderError.invalidData(fileName: fileName, reason: "The jurisdiction is not in the supported catalog for \(expectedCountry.rawValue).")
+        }
+
+        if expectedCountry == .australia, !fixture.inheritsFrom.isEmpty {
+            throw HolidayProviderError.invalidData(fileName: fileName, reason: "Australian jurisdiction fixtures cannot inherit holidays.")
+        }
+
+        if expectedJurisdictionId == "NZ-NATIONAL", !fixture.inheritsFrom.isEmpty {
+            throw HolidayProviderError.invalidData(fileName: fileName, reason: "NZ-NATIONAL cannot inherit another jurisdiction.")
+        }
+
+        for inheritedJurisdictionId in fixture.inheritsFrom {
+            guard inheritedJurisdictionId != expectedJurisdictionId else {
+                throw HolidayProviderError.invalidData(fileName: fileName, reason: "A fixture cannot inherit itself.")
+            }
+
+            guard inheritedJurisdictionId == "NZ-NATIONAL" else {
+                throw HolidayProviderError.invalidData(
+                    fileName: fileName,
+                    reason: "Regional New Zealand fixtures may inherit only NZ-NATIONAL."
+                )
+            }
+        }
+
+        var dates = Set<String>()
+        for entry in fixture.holidays {
+            let normalizedName = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedName.isEmpty else {
+                throw HolidayProviderError.invalidData(fileName: fileName, reason: "Holiday names cannot be empty.")
+            }
+
+            let date = try HolidayDateParser.date(from: entry.date, fileName: fileName)
+            guard calendar.component(.year, from: date) == expectedYear else {
+                throw HolidayProviderError.invalidData(
+                    fileName: fileName,
+                    reason: "Holiday date \(entry.date) falls outside \(expectedYear)."
+                )
+            }
+
+            guard dates.insert(entry.date).inserted else {
+                throw HolidayProviderError.invalidData(fileName: fileName, reason: "Duplicate holiday date \(entry.date).")
+            }
+
+            if let sourceName = entry.sourceName,
+               sourceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw HolidayProviderError.invalidData(fileName: fileName, reason: "A holiday source name is empty.")
+            }
+
+            if let sourceURL = entry.sourceURL, !isValidSourceURL(sourceURL) {
+                throw HolidayProviderError.invalidData(fileName: fileName, reason: "A holiday source URL is invalid.")
+            }
+        }
+    }
+
+    private func isValidSourceURL(_ value: String) -> Bool {
+        guard let url = URL(string: value) else {
+            return false
+        }
+
+        return url.scheme == "https" && url.host != nil
     }
 
     private func merged(_ entries: [ResolvedHolidayEntry]) -> [ResolvedHolidayEntry] {

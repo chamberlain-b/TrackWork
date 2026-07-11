@@ -5,6 +5,7 @@ struct ReportSnapshot: Equatable {
     let summary: Summary
     let dailyRecords: [DailyRecordRow]
     let leaveRows: [LeaveRow]
+    let customExclusionRows: [CustomExclusionRow]
     let manualAdjustmentRows: [ManualAdjustmentRow]
     let noteRows: [NoteRow]
     let publicHolidayRows: [PublicHolidayRow]
@@ -16,6 +17,7 @@ struct ReportSnapshot: Equatable {
         summary: Summary,
         dailyRecords: [DailyRecordRow],
         leaveRows: [LeaveRow],
+        customExclusionRows: [CustomExclusionRow],
         manualAdjustmentRows: [ManualAdjustmentRow],
         noteRows: [NoteRow],
         publicHolidayRows: [PublicHolidayRow],
@@ -26,6 +28,7 @@ struct ReportSnapshot: Equatable {
         self.summary = summary
         self.dailyRecords = dailyRecords
         self.leaveRows = leaveRows
+        self.customExclusionRows = customExclusionRows
         self.manualAdjustmentRows = manualAdjustmentRows
         self.noteRows = noteRows
         self.publicHolidayRows = publicHolidayRows
@@ -52,6 +55,7 @@ extension ReportSnapshot {
         let adjustedRequiredOfficeDays: Int
         let completedOfficeDays: Int
         let reviewRequiredDays: Int
+        let customExcludedDays: Int
         let leaveSummary: LeaveSummary
     }
 
@@ -73,6 +77,7 @@ extension ReportSnapshot {
         let isSelectedWorkday: Bool
         let isPublicHoliday: Bool
         let hasLeave: Bool
+        let isCustomExcluded: Bool
         let note: String?
 
         init(
@@ -87,6 +92,7 @@ extension ReportSnapshot {
             isSelectedWorkday: Bool,
             isPublicHoliday: Bool,
             hasLeave: Bool,
+            isCustomExcluded: Bool,
             note: String?
         ) {
             self.id = id
@@ -100,6 +106,7 @@ extension ReportSnapshot {
             self.isSelectedWorkday = isSelectedWorkday
             self.isPublicHoliday = isPublicHoliday
             self.hasLeave = hasLeave
+            self.isCustomExcluded = isCustomExcluded
             self.note = note
         }
     }
@@ -112,6 +119,14 @@ extension ReportSnapshot {
         let duration: LeaveDuration
         let countsAgainstEligibleDay: Bool
         let note: String?
+    }
+
+    struct CustomExclusionRow: Equatable, Identifiable {
+        let id: UUID
+        let date: Date
+        let isoDate: String
+        let reducesEligibleDays: Bool
+        let reason: String?
     }
 
     struct ManualAdjustmentRow: Equatable, Identifiable {

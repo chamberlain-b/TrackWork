@@ -6,34 +6,23 @@ struct GlassSurfaceModifier: ViewModifier {
     var isInteractive: Bool = false
 
     func body(content: Content) -> some View {
-        content
-            .modifier(
-                LiquidGlassSurfaceModifier(
-                    cornerRadius: cornerRadius,
-                    tint: tint,
-                    isInteractive: isInteractive
+        if isInteractive {
+            content
+                .glassEffect(
+                    .regular.tint(tint.opacity(0.22)).interactive(),
+                    in: .rect(cornerRadius: cornerRadius)
                 )
-            )
-    }
-}
-
-private struct LiquidGlassSurfaceModifier: ViewModifier {
-    let cornerRadius: CGFloat
-    let tint: Color
-    let isInteractive: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.ds.borderSubtle.opacity(0.7), lineWidth: 1)
-            }
-            .glassEffect(
-                isInteractive ? .regular.tint(tint.opacity(0.22)).interactive() : .regular.tint(tint.opacity(0.16)),
-                in: .rect(cornerRadius: cornerRadius)
-            )
+        } else {
+            content
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(Color.ds.borderSubtle.opacity(0.7), lineWidth: 1)
+                }
+        }
     }
 }
 

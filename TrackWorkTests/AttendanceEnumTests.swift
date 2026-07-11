@@ -111,4 +111,26 @@ final class AttendanceEnumTests: XCTestCase {
         XCTAssertEqual(attendanceDay.manualClassification, .unknown)
         XCTAssertNil(attendanceDay.note)
     }
+
+    func testNoteOnlyEditClearsManualOverrideWithoutChangingDetectedStatus() {
+        let attendanceDay = AttendanceDay(
+            date: Date(timeIntervalSince1970: 0),
+            detectedClassification: .home,
+            finalClassification: .office,
+            manualClassification: .office,
+            complianceTreatment: .countsAsOffice
+        )
+
+        attendanceDay.applyManualEdit(
+            finalClassification: .home,
+            note: "Forgot work pass",
+            isManualOverride: false,
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+
+        XCTAssertEqual(attendanceDay.detectedClassification, .home)
+        XCTAssertEqual(attendanceDay.finalClassification, .home)
+        XCTAssertNil(attendanceDay.manualClassification)
+        XCTAssertEqual(attendanceDay.note, "Forgot work pass")
+    }
 }

@@ -36,7 +36,8 @@ final class LocationEventTests: XCTestCase {
         XCTAssertEqual(persistedEvents[0].regionIdentifier, "worktrack.place.office.\(placeId.uuidString)")
     }
 
-    func testGeofenceRegionUsesPlaceMetadataAndCapsRadius() {
+    @MainActor
+    func testGeofenceRegionUsesPlaceMetadataAndCapsRadius() throws {
         let placeId = UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
         let place = Place(
             id: placeId,
@@ -47,16 +48,64 @@ final class LocationEventTests: XCTestCase {
             radiusMeters: 500
         )
 
-        let region = LocationTrackingService.makeRegion(for: place, maximumMonitoringDistance: 150)
+        let region = try XCTUnwrap(
+            LocationTrackingService.makeRegion(for: place, maximumMonitoringDistance: 150)
+        )
 
-        XCTAssertNotNil(region)
-        XCTAssertEqual(region?.identifier, "worktrack.place.home.\(placeId.uuidString)")
-        XCTAssertEqual(region?.center.latitude, -37.8136, accuracy: 0.000001)
-        XCTAssertEqual(region?.center.longitude, 144.9631, accuracy: 0.000001)
-        XCTAssertEqual(region?.radius, 150)
-        XCTAssertTrue(region?.notifyOnEntry ?? false)
-        XCTAssertTrue(region?.notifyOnExit ?? false)
-        XCTAssertEqual(LocationTrackingService.placeType(from: region?.identifier ?? ""), .home)
-        XCTAssertEqual(LocationTrackingService.placeId(from: region?.identifier ?? ""), placeId)
+        XCTAssertEqual(region.identifier, "worktrack.place.home.\(placeId.uuidString)")
+        XCTAssertEqual(region.center.latitude, -37.8136, accuracy: 0.000001)
+        XCTAssertEqual(region.center.longitude, 144.9631, accuracy: 0.000001)
+        XCTAssertEqual(region.radius, 150)
+        XCTAssertTrue(region.notifyOnEntry)
+        XCTAssertTrue(region.notifyOnExit)
+        XCTAssertEqual(LocationTrackingService.placeType(from: region.identifier), .home)
+        XCTAssertEqual(LocationTrackingService.placeId(from: region.identifier), placeId)
+    }
+
+    func testActiveHolidayResolverDoesNotLeakAnotherJurisdiction() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 7, day: 10))
+        )
+        let victoriaHoliday = PublicHoliday(
+            date: date,
+            name: "Victorian Holiday",
+            country: .australia,
+            jurisdictionId: "AU-VIC",
+            isRegional: true,
+            sourceName: "Victoria"
+        )
+        let newSouthWalesHoliday = PublicHoliday(
+            date: date,
+            name: "NSW Holiday",
+            country: .australia,
+            jurisdictionId: "AU-NSW",
+            isRegional: true,
+            sourceName: "New South Wales"
+        )
+
+        let activeHoliday = ActiveJurisdictionHolidayResolver.holiday(
+            on: date,
+            from: [newSouthWalesHoliday, victoriaHoliday],
+            jurisdictionId: "AU-VIC",
+            calendar: calendar
+        )
+
+        XCTAssertEqual(activeHoliday?.name, "Victorian Holiday")
+        XCTAssertEqual(activeHoliday?.jurisdictionId, "AU-VIC")
+    }
+
+    func testCalendarDayAccessibilityIdentifierUsesStableISODate() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Australia/Melbourne")!
+        let date = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 7, day: 11, hour: 23, minute: 45))
+        )
+
+        XCTAssertEqual(
+            calendar.calendarDayAccessibilityIdentifier(for: date),
+            "calendar.day.2026-07-11"
+        )
     }
 }

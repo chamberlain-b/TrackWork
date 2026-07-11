@@ -3,19 +3,11 @@
   "countryCode": "NZ",
   "jurisdictionCode": "NZ-AUCKLAND",
   "year": 2026,
-  "sourceName": "Employment New Zealand public holidays",
-  "sourceURL": "https://www.employment.govt.nz/leave-and-holidays/public-holidays/public-holidays-and-anniversary-dates/",
-  "verifiedExhaustive": false,
-  "inheritsFrom": [
-    "NZ-NATIONAL"
-  ],
+  "sourceName": "New Zealand Government regional anniversary dates",
+  "sourceURL": "https://www.govt.nz/browse/work/public-holidays-and-work/public-holidays-and-anniversary-dates/",
+  "verifiedExhaustive": true,
+  "inheritsFrom": ["NZ-NATIONAL"],
   "holidays": [
-    {
-      "date": "2026-01-26",
-      "name": "Auckland Anniversary Day",
-      "sourceName": "Employment New Zealand public holidays",
-      "sourceURL": "https://www.employment.govt.nz/leave-and-holidays/public-holidays/public-holidays-and-anniversary-dates/",
-      "notes": "Regional fixture entry. National NZ holidays are inherited from NZ-NATIONAL."
-    }
+    { "date": "2026-01-26", "name": "Auckland Anniversary Day", "notes": "Observed date." }
   ]
 }

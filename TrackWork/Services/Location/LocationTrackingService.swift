@@ -16,13 +16,18 @@ final class LocationTrackingService: NSObject {
     static let regionIdentifierPrefix = "worktrack.place"
 
     private let locationManager: CLLocationManager
+    private let automaticBackgroundTrackingEnabled: Bool
     private var modelContext: ModelContext?
     private var monitoredPlaceSnapshots: [String: MonitoredPlaceSnapshot] = [:]
 
     private(set) var trackingStatus: TrackingStatus = .idle
 
-    init(locationManager: CLLocationManager = CLLocationManager()) {
+    init(
+        locationManager: CLLocationManager = CLLocationManager(),
+        automaticBackgroundTrackingEnabled: Bool = false
+    ) {
         self.locationManager = locationManager
+        self.automaticBackgroundTrackingEnabled = automaticBackgroundTrackingEnabled
         super.init()
         self.locationManager.delegate = self
     }
@@ -43,6 +48,12 @@ final class LocationTrackingService: NSObject {
     }
 
     func refreshMonitoring(for places: [Place]) {
+        guard automaticBackgroundTrackingEnabled else {
+            stopWorkTrackRegions()
+            trackingStatus = .unavailable("Background tracking is unavailable in this MVP build.")
+            return
+        }
+
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else {
             stopWorkTrackRegions()
             trackingStatus = .unavailable("Geofence monitoring is not available on this device.")
@@ -201,7 +212,13 @@ final class LocationTrackingService: NSObject {
         let locationEvents = try modelContext.fetch(FetchDescriptor<LocationEvent>())
         let leaveRecords = try modelContext.fetch(FetchDescriptor<LeaveRecord>())
         let publicHolidays = try modelContext.fetch(FetchDescriptor<PublicHoliday>())
+        let customExcludedDays = try modelContext.fetch(FetchDescriptor<CustomExcludedDay>())
         let rule = try modelContext.fetch(FetchDescriptor<ComplianceRule>()).first
+        let activeJurisdictionId = rule?.jurisdictionId ?? "AU-VIC"
+        let applicablePublicHolidays = ActiveJurisdictionHolidayResolver.holidays(
+            from: publicHolidays,
+            jurisdictionId: activeJurisdictionId
+        )
         let inferenceService = AttendanceInferenceService(
             calendar: calendar,
             minimumOfficeMinutes: rule?.minimumOfficeMinutes ?? 180
@@ -212,7 +229,8 @@ final class LocationTrackingService: NSObject {
             affectedDates: [affectedDate],
             events: locationEvents,
             leaveRecords: leaveRecords,
-            publicHolidays: publicHolidays,
+            publicHolidays: applicablePublicHolidays,
+            customExcludedDays: customExcludedDays,
             selectedISOWeekdays: Set(rule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
         )
     }

@@ -35,7 +35,7 @@ extension Color {
         static let complianceWarning = Color("ComplianceWarning")
         static let complianceBad = Color("ComplianceBad")
 
-        static let separator = Color("Separator")
+        static let separator = Color("DSSeparator")
         static let borderSubtle = Color("BorderSubtle")
         static let shadowTint = Color("ShadowTint")
     }

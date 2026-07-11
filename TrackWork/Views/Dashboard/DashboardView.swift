@@ -5,21 +5,45 @@ struct DashboardView: View {
     @Query(sort: \AttendanceDay.date) private var attendanceDays: [AttendanceDay]
     @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
     @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
+    @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
-    private let calendar = Calendar.dashboardCalendar
-    private let calculator = ComplianceCalculator()
+    @State private var selectedTrendGranularity: ComplianceTrendGranularity = .monthly
 
+    private let onOpenCalendar: (() -> Void)?
+    private let onOpenSettings: (() -> Void)?
+    private let calendar = Calendar.dashboardCalendar
+    private let periodEvaluator = CompliancePeriodEvaluator()
+    private let trendCalculator = ComplianceTrendCalculator()
+
+    init(
+        onOpenCalendar: (() -> Void)? = nil,
+        onOpenSettings: (() -> Void)? = nil
+    ) {
+        self.onOpenCalendar = onOpenCalendar
+        self.onOpenSettings = onOpenSettings
+    }
+}
+
+private extension DashboardView {
     private var currentMonthStart: Date {
-        calendar.monthStart(for: .now)
+        calendar.dashboardMonthStart(for: .now)
     }
 
     private var currentMonthEnd: Date {
-        calendar.monthEnd(for: currentMonthStart)
+        calendar.dashboardMonthEnd(for: currentMonthStart)
+    }
+
+    private var today: Date {
+        calendar.startOfDay(for: .now)
     }
 
     private var activeRule: ComplianceRule {
         complianceRules.first ?? ComplianceRule()
+    }
+
+    private var ruleAdapter: DashboardRuleAdapter {
+        DashboardRuleAdapter(rule: activeRule)
     }
 
     private var selectedISOWeekdays: Set<Int> {
@@ -27,17 +51,23 @@ struct DashboardView: View {
     }
 
     private var monthAttendanceDays: [AttendanceDay] {
-        attendanceDays.filter { calendar.isDate($0.date, inSameMonthAs: currentMonthStart) }
+        attendanceDays.filter { calendar.isDate($0.date, inSameDashboardMonthAs: currentMonthStart) }
     }
 
     private var monthLeaveRecords: [LeaveRecord] {
-        leaveRecords.filter { calendar.isDate($0.date, inSameMonthAs: currentMonthStart) }
+        leaveRecords.filter { calendar.isDate($0.date, inSameDashboardMonthAs: currentMonthStart) }
     }
 
     private var monthPublicHolidays: [PublicHoliday] {
         publicHolidays.filter { publicHoliday in
-            calendar.isDate(publicHoliday.date, inSameMonthAs: currentMonthStart)
+            calendar.isDate(publicHoliday.date, inSameDashboardMonthAs: currentMonthStart)
                 && publicHoliday.jurisdictionId == activeRule.jurisdictionId
+        }
+    }
+
+    private var monthCustomExcludedDays: [CustomExcludedDay] {
+        customExcludedDays.filter {
+            calendar.isDate($0.date, inSameDashboardMonthAs: currentMonthStart)
         }
     }
 
@@ -46,68 +76,32 @@ struct DashboardView: View {
     }
 
     private var summary: ComplianceSummary {
-        calculator.calculate(
-            ComplianceCalculator.Input(
-                periodStart: currentMonthStart,
-                periodEnd: currentMonthEnd,
+        periodEvaluator.evaluate(
+            CompliancePeriodEvaluator.Input(
+                range: ComplianceDateRange(
+                    start: currentMonthStart,
+                    end: currentMonthEnd,
+                    calendar: calendar
+                ),
                 calendar: calendar,
-                selectedISOWeekdays: selectedISOWeekdays,
-                publicHolidays: publicHolidayDates,
-                leaveRecords: monthLeaveRecords.compactMap(calculatorLeaveRecord),
-                attendanceDays: monthAttendanceDays.compactMap(calculatorAttendanceDay),
-                requirement: calculatorRequirement
+                rule: activeRule,
+                attendanceDays: monthAttendanceDays,
+                leaveRecords: monthLeaveRecords,
+                publicHolidays: monthPublicHolidays,
+                customExcludedDays: monthCustomExcludedDays,
+                evaluationDate: today
             )
         )
     }
 
-    private var targetProgress: Double {
-        guard summary.requiredOfficeDays > 0 else {
-            return remainingOfficeDays == 0 ? 1 : 0
-        }
-
-        return min(Double(summary.completedOfficeDays) / Double(summary.requiredOfficeDays), 1)
-    }
-
-    private var actualCompliancePercentage: Double {
-        guard summary.adjustedEligibleDays > 0 else {
-            return 0
-        }
-
-        return Double(summary.completedOfficeDays) / Double(summary.adjustedEligibleDays)
-    }
-
-    private var remainingOfficeDays: Int {
-        max(0, summary.requiredOfficeDays - summary.completedOfficeDays)
-    }
-
-    private var annualLeaveExcludedDays: Int {
-        leaveExclusionCounts[.annualLeave, default: 0]
-    }
-
-    private var sickLeaveExcludedDays: Int {
-        leaveExclusionCounts[.sickLeave, default: 0]
-    }
-
-    private var leaveExclusionCounts: [LeaveType: Int] {
-        let eligibleDates = eligibleDatesBeforeLeave
-        let groupedLeaveRecords = Dictionary(grouping: monthLeaveRecords) { leaveRecord in
-            calendar.startOfDay(for: leaveRecord.date)
-        }
-
-        return groupedLeaveRecords.reduce(into: [:]) { counts, entry in
-            let date = entry.key
-
-            guard eligibleDates.contains(date),
-                  let leaveType = entry.value
-                    .sorted(by: leaveRecordSort)
-                    .compactMap(\.leaveType)
-                    .first
-            else {
-                return
-            }
-
-            counts[leaveType, default: 0] += 1
-        }
+    private var scheduledWorkdayDates: Set<Date> {
+        BusinessDayCalculator().eligibleDates(
+            from: currentMonthStart,
+            through: currentMonthEnd,
+            calendar: calendar,
+            selectedISOWeekdays: selectedISOWeekdays,
+            publicHolidays: []
+        )
     }
 
     private var eligibleDatesBeforeLeave: Set<Date> {
@@ -120,43 +114,113 @@ struct DashboardView: View {
         )
     }
 
+    private var adjustedEligibleDates: Set<Date> {
+        eligibleDatesBeforeLeave
+            .subtracting(leaveExclusionDates)
+            .subtracting(customExclusionDates)
+    }
+
+    private var elapsedEligibleDates: Set<Date> {
+        adjustedEligibleDates.filter { $0 < today && $0 <= currentMonthEnd }
+    }
+
+    private var eligibleDatesThroughToday: Set<Date> {
+        adjustedEligibleDates.filter { $0 <= today && $0 <= currentMonthEnd }
+    }
+
+    private var confirmedDatesThroughToday: Set<Date> {
+        Set(
+            monthAttendanceDays.compactMap { attendanceDay in
+                let date = calendar.startOfDay(for: attendanceDay.date)
+                guard eligibleDatesThroughToday.contains(date),
+                      let finalClassification = attendanceDay.finalClassification,
+                      finalClassification != .unknown
+                else {
+                    return nil
+                }
+
+                return date
+            }
+        )
+    }
+
+    private var resolvedElapsedDates: Set<Date> {
+        confirmedDatesThroughToday.intersection(elapsedEligibleDates)
+    }
+
+    private var reviewDates: Set<Date> {
+        elapsedEligibleDates.subtracting(resolvedElapsedDates)
+    }
+
+    private var targetProgress: Double {
+        guard summary.requiredOfficeDays > 0 else {
+            return 0
+        }
+
+        return min(Double(summary.completedOfficeDays) / Double(summary.requiredOfficeDays), 1)
+    }
+
+    private var remainingOfficeDays: Int {
+        max(0, summary.requiredOfficeDays - summary.completedOfficeDays)
+    }
+
+    private var leaveExclusionCounts: [LeaveType: Int] {
+        let eligibleDates = eligibleDatesBeforeLeave
+        let groupedLeaveRecords = Dictionary(grouping: monthLeaveRecords) { leaveRecord in
+            calendar.startOfDay(for: leaveRecord.date)
+        }
+
+        return groupedLeaveRecords.reduce(into: [:]) { counts, entry in
+            let leaveType = entry.value
+                .filter { leaveRecord in leaveRecord.duration == .fullDay }
+                .sorted { DashboardDataAdapter.leaveRecordSort($0, $1) }
+                .compactMap(\.leaveType)
+                .first
+
+            guard eligibleDates.contains(entry.key), let leaveType
+            else {
+                return
+            }
+
+            counts[leaveType, default: 0] += 1
+        }
+    }
+
+    private var annualLeaveExcludedDays: Int {
+        leaveExclusionCounts[.annualLeave, default: 0]
+    }
+
+    private var sickLeaveExcludedDays: Int {
+        leaveExclusionCounts[.sickLeave, default: 0]
+    }
+
     private var publicHolidaysExcludedDays: Int {
-        publicHolidayDates.filter { date in
-            selectedISOWeekdays.contains(calendar.isoWeekday(for: date))
-        }.count
-    }
-
-    private var complianceStatus: ComplianceStatus {
-        if summary.completedOfficeDays >= summary.requiredOfficeDays {
-            return .complete
-        }
-
-        if possibleRemainingOfficeDates < remainingOfficeDays {
-            return .impossible
-        }
-
-        return summary.reviewRequiredDays > 0 ? .atRisk : .onTrack
-    }
-
-    private var possibleRemainingOfficeDates: Int {
-        eligibleDatesBeforeLeave.filter { date in
-            date >= calendar.startOfDay(for: .now)
-                && !leaveExclusionDates.contains(date)
-                && !completedOfficeDates.contains(date)
-        }.count
+        scheduledWorkdayDates.intersection(publicHolidayDates).count
     }
 
     private var leaveExclusionDates: Set<Date> {
-        let eligibleDates = eligibleDatesBeforeLeave
-
-        return Set(
+        Set(
             monthLeaveRecords.compactMap { leaveRecord in
                 guard leaveRecord.duration == .fullDay else {
                     return nil
                 }
 
                 let date = calendar.startOfDay(for: leaveRecord.date)
-                return eligibleDates.contains(date) ? date : nil
+                return eligibleDatesBeforeLeave.contains(date) ? date : nil
+            }
+        )
+    }
+
+    private var customExclusionDates: Set<Date> {
+        Set(
+            monthCustomExcludedDays.compactMap { excludedDay in
+                let date = calendar.startOfDay(for: excludedDay.date)
+                guard eligibleDatesBeforeLeave.contains(date),
+                      !leaveExclusionDates.contains(date) else {
+                    return nil
+                }
+
+                return date
             }
         )
     }
@@ -164,330 +228,161 @@ struct DashboardView: View {
     private var completedOfficeDates: Set<Date> {
         Set(
             monthAttendanceDays.compactMap { attendanceDay in
+                let date = calendar.startOfDay(for: attendanceDay.date)
+                guard adjustedEligibleDates.contains(date), date <= today else {
+                    return nil
+                }
+
                 switch attendanceDay.finalClassification {
                 case .office:
-                    calendar.startOfDay(for: attendanceDay.date)
+                    return date
                 case .mixed where attendanceDay.officeMinutes >= activeRule.minimumOfficeMinutes:
-                    calendar.startOfDay(for: attendanceDay.date)
+                    return date
                 default:
-                    nil
+                    return nil
                 }
             }
         )
     }
 
-    private var calculatorRequirement: ComplianceCalculator.Requirement {
+    private var possibleRemainingOfficeDates: Int {
+        adjustedEligibleDates.filter { date in
+            date >= today && !completedOfficeDates.contains(date)
+        }.count
+    }
+
+    private var hasPeriodData: Bool {
+        !monthAttendanceDays.isEmpty || !monthLeaveRecords.isEmpty
+    }
+
+    private var hasConfiguredTarget: Bool {
         switch activeRule.requirementType ?? .fixedMonthlyDays {
         case .fixedMonthlyDays:
-            .fixedMonthlyDays(
-                baseRequiredDays: activeRule.fixedRequiredDays ?? 0,
-                prorateForLeave: activeRule.prorateFixedTargetForLeave
-            )
+            return (activeRule.fixedRequiredDays ?? 0) > 0
         case .percentageOfEligibleDays:
-            .percentageOfEligibleDays(activeRule.requiredPercentage ?? 0)
+            return (activeRule.requiredPercentage ?? 0) > 0
         }
+    }
+
+    private var dashboardStatus: DashboardStatus {
+        guard hasConfiguredTarget else {
+            return .notConfigured
+        }
+
+        guard summary.adjustedEligibleDays > 0 else {
+            return .noEligibleDays
+        }
+
+        if !reviewDates.isEmpty {
+            return .needsReview
+        }
+
+        guard hasPeriodData else {
+            return .ready
+        }
+
+        if summary.completedOfficeDays >= summary.requiredOfficeDays {
+            return .complete
+        }
+
+        if possibleRemainingOfficeDates < remainingOfficeDays {
+            return .notReachable
+        }
+
+        return .reachable
     }
 
     private var requirementExplanation: String {
-        switch activeRule.requirementType ?? .fixedMonthlyDays {
-        case .fixedMonthlyDays:
-            if activeRule.prorateFixedTargetForLeave {
-                return "Fixed target adjusted from \(activeRule.fixedRequiredDays ?? 0) using \(summary.adjustedEligibleDays) of \(summary.baseEligibleDays) eligible days."
-            }
+        ruleAdapter.requirementExplanation(for: summary)
+    }
 
-            return "Fixed target is not prorated for leave for this rule."
-        case .percentageOfEligibleDays:
-            let percentage = activeRule.requiredPercentage ?? 0
-            let formattedPercentage = percentage.formatted(.percent.precision(.fractionLength(0...1)))
-            return "Percentage target uses \(formattedPercentage) of \(summary.adjustedEligibleDays) leave-adjusted eligible days."
+    private var jurisdictionName: String {
+        ruleAdapter.jurisdictionName
+    }
+
+    private var recentTrend: [ComplianceTrendPoint] {
+        guard !complianceRules.isEmpty else {
+            return []
         }
+
+        return trendCalculator.points(
+            granularity: selectedTrendGranularity,
+            endingAt: today,
+            calendar: calendar,
+            rule: activeRule,
+            attendanceDays: attendanceDays,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays
+        )
     }
 
-    private var statusColor: Color {
-        switch complianceStatus {
-        case .complete, .onTrack:
-            Color.ds.success
-        case .atRisk:
-            Color.ds.warning
-        case .impossible:
-            Color.ds.critical
-        }
-    }
+}
 
-    private var statusPillStyle: DSStatusPillStyle {
-        switch complianceStatus {
-        case .complete, .onTrack:
-            .success
-        case .atRisk:
-            .warning
-        case .impossible:
-            .critical
-        }
-    }
-
-    private var bodyColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 154), spacing: AppSpacing.md)]
-    }
-
+extension DashboardView {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                    ComplianceHeroCard(
-                        monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
-                        completedOfficeDays: summary.completedOfficeDays,
-                        requiredOfficeDays: summary.requiredOfficeDays,
-                        remainingOfficeDays: remainingOfficeDays,
-                        progress: targetProgress,
-                        statusText: complianceStatus.displayName,
-                        statusSubtitle: statusSubtitle,
-                        statusColor: statusColor,
-                        statusStyle: statusPillStyle
-                    )
-
-                    DSInsightCallout(
-                        icon: "calendar.badge.clock",
-                        message: requirementExplanation,
-                        highlightedText: "Requirement: \(summary.requiredOfficeDays) days"
-                    )
-
-                    LazyVGrid(columns: bodyColumns, spacing: AppSpacing.md) {
-                        DSMetricTile(
-                            systemImage: "calendar.day.timeline.left",
-                            label: "Eligible",
-                            value: summary.adjustedEligibleDays.formatted(),
-                            subtitle: "After holidays and leave"
+                LazyVStack(alignment: .leading, spacing: AppSpacing.lg) {
+                    if complianceRules.isEmpty {
+                        DashboardSetupCard(onOpenSettings: onOpenSettings)
+                    } else {
+                        ComplianceHeroCard(
+                            monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
+                            completedOfficeDays: summary.completedOfficeDays,
+                            requiredOfficeDays: summary.requiredOfficeDays,
+                            remainingOfficeDays: remainingOfficeDays,
+                            availableOfficeDays: possibleRemainingOfficeDates,
+                            progress: targetProgress,
+                            status: dashboardStatus,
+                            targetIsConfigured: hasConfiguredTarget
                         )
 
-                        DSMetricTile(
-                            systemImage: "percent",
-                            label: "Compliance",
-                            value: actualCompliancePercentage.formatted(.percent.precision(.fractionLength(0...1))),
-                            subtitle: "Office / eligible",
-                            statusColor: statusColor
+                        if !reviewDates.isEmpty {
+                            DashboardReviewCard(
+                                reviewCount: reviewDates.count,
+                                onOpenCalendar: onOpenCalendar
+                            )
+                        } else if !hasPeriodData {
+                            DashboardStartCard(onOpenCalendar: onOpenCalendar)
+                        }
+
+                        MonthCalculationCard(
+                            scheduledWorkdays: scheduledWorkdayDates.count,
+                            publicHolidays: publicHolidaysExcludedDays,
+                            annualLeave: annualLeaveExcludedDays,
+                            sickLeave: sickLeaveExcludedDays,
+                            customExcluded: summary.customExcludedDays,
+                            eligibleWorkdays: summary.adjustedEligibleDays,
+                            requiredOfficeDays: summary.requiredOfficeDays,
+                            jurisdictionName: jurisdictionName,
+                            explanation: requirementExplanation
                         )
 
-                        DSMetricTile(
-                            systemImage: "sun.max",
-                            label: "Annual leave",
-                            value: annualLeaveExcludedDays.formatted(),
-                            subtitle: "Eligible days removed",
-                            statusColor: Color.ds.leaveDay
-                        )
+                        if hasPeriodData {
+                            RecordedCoverageCard(
+                                eligibleDaysToDate: eligibleDatesThroughToday.count,
+                                confirmedDays: confirmedDatesThroughToday.count,
+                                officeDays: completedOfficeDates.intersection(eligibleDatesThroughToday).count,
+                                reviewDays: reviewDates.count
+                            )
+                        }
 
-                        DSMetricTile(
-                            systemImage: "cross.case",
-                            label: "Sick leave",
-                            value: sickLeaveExcludedDays.formatted(),
-                            subtitle: "Eligible days removed",
-                            statusColor: Color.ds.leaveDay
-                        )
-
-                        DSMetricTile(
-                            systemImage: "sparkles",
-                            label: "Holidays",
-                            value: publicHolidaysExcludedDays.formatted(),
-                            subtitle: activeRule.jurisdictionId,
-                            statusColor: Color.ds.publicHoliday
-                        )
-
-                        DSMetricTile(
-                            systemImage: "exclamationmark.bubble",
-                            label: "Review",
-                            value: summary.reviewRequiredDays.formatted(),
-                            subtitle: "Unknown final status",
-                            statusColor: summary.reviewRequiredDays == 0 ? Color.ds.success : Color.ds.warning
-                        )
+                        if hasConfiguredTarget {
+                            RecentTrendCard(
+                                points: recentTrend,
+                                selectedGranularity: $selectedTrendGranularity
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.vertical, AppSpacing.lg)
             }
             .appScreenBackground()
-            .navigationTitle("Dashboard")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Summary")
+            .navigationBarTitleDisplayMode(.large)
         }
     }
 
-    private var statusSubtitle: String {
-        switch complianceStatus {
-        case .complete:
-            "Requirement met"
-        case .onTrack:
-            "Achievable this month"
-        case .atRisk:
-            "Review unknown days"
-        case .impossible:
-            "Not enough eligible days left"
-        }
-    }
-
-    private func calculatorLeaveRecord(_ leaveRecord: LeaveRecord) -> ComplianceCalculator.LeaveRecord? {
-        guard let leaveType = leaveRecord.leaveType,
-              let duration = leaveRecord.duration
-        else {
-            return nil
-        }
-
-        return ComplianceCalculator.LeaveRecord(
-            date: leaveRecord.date,
-            type: leaveType,
-            duration: duration
-        )
-    }
-
-    private func calculatorAttendanceDay(_ attendanceDay: AttendanceDay) -> ComplianceCalculator.AttendanceDay? {
-        guard let finalClassification = attendanceDay.finalClassification else {
-            return nil
-        }
-
-        return ComplianceCalculator.AttendanceDay(
-            date: attendanceDay.date,
-            finalClassification: finalClassification,
-            officeMinutes: attendanceDay.officeMinutes
-        )
-    }
-
-    private func leaveRecordSort(_ lhs: LeaveRecord, _ rhs: LeaveRecord) -> Bool {
-        if lhs.date != rhs.date {
-            return lhs.date < rhs.date
-        }
-
-        return lhs.leaveTypeRaw < rhs.leaveTypeRaw
-    }
-}
-
-private struct ComplianceHeroCard: View {
-    let monthTitle: String
-    let completedOfficeDays: Int
-    let requiredOfficeDays: Int
-    let remainingOfficeDays: Int
-    let progress: Double
-    let statusText: String
-    let statusSubtitle: String
-    let statusColor: Color
-    let statusStyle: DSStatusPillStyle
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            HStack(alignment: .top, spacing: AppSpacing.md) {
-                VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                    Text(monthTitle)
-                        .font(AppTypography.captionStrong)
-                        .foregroundStyle(Color.ds.textSecondary)
-
-                    Text("\(completedOfficeDays) of \(requiredOfficeDays)")
-                        .font(AppTypography.heroMetric.monospacedDigit())
-                        .foregroundStyle(Color.ds.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-
-                    Text("office days")
-                        .font(AppTypography.callout)
-                        .foregroundStyle(Color.ds.textSecondary)
-                }
-
-                Spacer(minLength: AppSpacing.md)
-
-                ZStack {
-                    Circle()
-                        .stroke(Color.ds.accentMuted.opacity(0.26), lineWidth: 10)
-
-                    Circle()
-                        .trim(from: 0, to: min(max(progress, 0), 1))
-                        .stroke(
-                            statusColor,
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-
-                    Text(progress.formatted(.percent.precision(.fractionLength(0))))
-                        .font(AppTypography.captionStrong.monospacedDigit())
-                        .foregroundStyle(Color.ds.textPrimary)
-                }
-                .frame(width: 82, height: 82)
-                .accessibilityLabel("Target progress \(progress.formatted(.percent.precision(.fractionLength(0))))")
-            }
-
-            VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                HStack(spacing: AppSpacing.sm) {
-                    DSStatusPill(text: statusText, systemImage: "checkmark.circle.fill", style: statusStyle)
-
-                    Text(statusSubtitle)
-                        .font(AppTypography.captionStrong)
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.82)
-                }
-
-                ProgressView(value: min(max(progress, 0), 1))
-                    .tint(statusColor)
-                    .background(Color.ds.accentMuted.opacity(0.2), in: Capsule())
-                    .scaleEffect(x: 1, y: 1.45, anchor: .center)
-
-                Label("\(remainingOfficeDays) office day\(remainingOfficeDays == 1 ? "" : "s") remaining this month", systemImage: "arrow.forward.circle")
-                    .font(AppTypography.callout)
-                    .foregroundStyle(Color.ds.textSecondary)
-            }
-        }
-        .padding(AppSpacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: AppRadius.heroCard, tint: statusColor)
-    }
-}
-
-private extension ComplianceStatus {
-    var systemImage: String {
-        switch self {
-        case .complete:
-            "checkmark.seal"
-        case .onTrack:
-            "gauge.with.dots.needle.bottom.50percent"
-        case .atRisk:
-            "exclamationmark.triangle"
-        case .impossible:
-            "xmark.octagon"
-        }
-    }
-}
-
-private extension Calendar {
-    static var dashboardCalendar: Calendar {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.locale = .autoupdatingCurrent
-        calendar.timeZone = .autoupdatingCurrent
-        calendar.firstWeekday = 2
-        return calendar
-    }
-
-    func monthStart(for date: Date) -> Date {
-        dateInterval(of: .month, for: date)?.start ?? startOfDay(for: date)
-    }
-
-    func monthEnd(for date: Date) -> Date {
-        guard let monthInterval = dateInterval(of: .month, for: date),
-              let finalDate = self.date(byAdding: .day, value: -1, to: monthInterval.end)
-        else {
-            return startOfDay(for: date)
-        }
-
-        return startOfDay(for: finalDate)
-    }
-
-    func isDate(_ date: Date, inSameMonthAs referenceDate: Date) -> Bool {
-        let components = self.dateComponents([.year, .month], from: date)
-        let referenceComponents = self.dateComponents([.year, .month], from: referenceDate)
-        return components.year == referenceComponents.year
-            && components.month == referenceComponents.month
-    }
-
-    func isoWeekday(for date: Date) -> Int {
-        let weekday = component(.weekday, from: date)
-        return weekday == 1 ? 7 : weekday - 1
-    }
-}
-
-#Preview {
-    DashboardView()
-        .modelContainer(PreviewData.modelContainer())
 }

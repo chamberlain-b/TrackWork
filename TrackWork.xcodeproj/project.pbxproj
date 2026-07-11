@@ -6,6 +6,40 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5F8A73012FF7600000DC4D9E /* JurisdictionCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72992FF67DE600DC4D9E /* JurisdictionCatalogTests.swift */; };
+		5F8A73022FF7600000DC4D9E /* AttendanceEnumTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72A82FF67F1B00DC4D9E /* AttendanceEnumTests.swift */; };
+		5F8A73032FF7600000DC4D9E /* ComplianceCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72AB2FF680D200DC4D9E /* ComplianceCalculatorTests.swift */; };
+		5F8A73042FF7600000DC4D9E /* LocalJSONHolidayProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72CB2FF6872000DC4D9E /* LocalJSONHolidayProviderTests.swift */; };
+		5F8A73052FF7600000DC4D9E /* ReportSnapshotBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72D22FF7396000DC4D9E /* ReportSnapshotBuilderTests.swift */; };
+		5F8A73062FF7600000DC4D9E /* CSVExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72D52FF73C3700DC4D9E /* CSVExportServiceTests.swift */; };
+		5F8A73072FF7600000DC4D9E /* PDFExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72D82FF7409E00DC4D9E /* PDFExportServiceTests.swift */; };
+		5F8A73082FF7600000DC4D9E /* PlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72DE2FF742FB00DC4D9E /* PlaceTests.swift */; };
+		5F8A73092FF7600000DC4D9E /* LocationEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */; };
+		5F8A730A2FF7600000DC4D9E /* AttendanceInferenceServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A72ED2FF74B9A00DC4D9E /* AttendanceInferenceServiceTests.swift */; };
+		5F8A73162FF7600000DC4D9E /* DataManagementServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73152FF7600000DC4D9E /* DataManagementServiceTests.swift */; };
+		5F8A731A2FF7600000DC4D9E /* CompliancePeriodTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */; };
+		5F8A731B2FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */; };
+		5F8A731C2FF7600000DC4D9E /* CustomExcludedDayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5F8A73102FF7600000DC4D9E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = TrackWork;
+		};
+		5F8A73262FF7600000DC4D9E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = TrackWork;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* TrackWork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TrackWork.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F8A72992FF67DE600DC4D9E /* JurisdictionCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JurisdictionCatalogTests.swift; sourceTree = "<group>"; };
@@ -18,6 +52,12 @@
 		5F8A72DE2FF742FB00DC4D9E /* PlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceTests.swift; sourceTree = "<group>"; };
 		5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEventTests.swift; sourceTree = "<group>"; };
 		5F8A72ED2FF74B9A00DC4D9E /* AttendanceInferenceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceInferenceServiceTests.swift; sourceTree = "<group>"; };
+		5F8A730B2FF7600000DC4D9E /* TrackWorkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F8A73152FF7600000DC4D9E /* DataManagementServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataManagementServiceTests.swift; sourceTree = "<group>"; };
+		5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompliancePeriodTests.swift; sourceTree = "<group>"; };
+		5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplianceTrendCalculatorTests.swift; sourceTree = "<group>"; };
+		5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExcludedDayTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -26,10 +66,25 @@
 			path = TrackWork;
 			sourceTree = "<group>";
 		};
+		5F8A73202FF7600000DC4D9E /* TrackWorkUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = TrackWorkUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		5F8A730E2FF7600000DC4D9E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		5F8A73242FF7600000DC4D9E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -43,6 +98,7 @@
 				000000000000000000000010 /* TrackWork */,
 				000000000000000000000020 /* Products */,
 				5F8A72982FF67DE600DC4D9E /* TrackWorkTests */,
+				5F8A73202FF7600000DC4D9E /* TrackWorkUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -50,6 +106,8 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* TrackWork.app */,
+				5F8A730B2FF7600000DC4D9E /* TrackWorkTests.xctest */,
+				5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -67,6 +125,10 @@
 				5F8A72DE2FF742FB00DC4D9E /* PlaceTests.swift */,
 				5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */,
 				5F8A72ED2FF74B9A00DC4D9E /* AttendanceInferenceServiceTests.swift */,
+				5F8A73152FF7600000DC4D9E /* DataManagementServiceTests.swift */,
+				5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */,
+				5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */,
+				5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */,
 			);
 			path = TrackWorkTests;
 			sourceTree = "<group>";
@@ -92,6 +154,45 @@
 			productReference = 000000000000000000000120 /* TrackWork.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5F8A730C2FF7600000DC4D9E /* TrackWorkTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5F8A73122FF7600000DC4D9E /* Build configuration list for PBXNativeTarget "TrackWorkTests" */;
+			buildPhases = (
+				5F8A730D2FF7600000DC4D9E /* Sources */,
+				5F8A730E2FF7600000DC4D9E /* Frameworks */,
+				5F8A730F2FF7600000DC4D9E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5F8A73112FF7600000DC4D9E /* PBXTargetDependency */,
+			);
+			name = TrackWorkTests;
+			productName = TrackWorkTests;
+			productReference = 5F8A730B2FF7600000DC4D9E /* TrackWorkTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		5F8A73222FF7600000DC4D9E /* TrackWorkUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5F8A73282FF7600000DC4D9E /* Build configuration list for PBXNativeTarget "TrackWorkUITests" */;
+			buildPhases = (
+				5F8A73232FF7600000DC4D9E /* Sources */,
+				5F8A73242FF7600000DC4D9E /* Frameworks */,
+				5F8A73252FF7600000DC4D9E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5F8A73272FF7600000DC4D9E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5F8A73202FF7600000DC4D9E /* TrackWorkUITests */,
+			);
+			name = TrackWorkUITests;
+			productName = TrackWorkUITests;
+			productReference = 5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -104,6 +205,14 @@
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					5F8A730C2FF7600000DC4D9E = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 000000000000000100000000;
+					};
+					5F8A73222FF7600000DC4D9E = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 000000000000000100000000;
 					};
 				};
 			};
@@ -122,12 +231,24 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* TrackWork */,
+				5F8A730C2FF7600000DC4D9E /* TrackWorkTests */,
+				5F8A73222FF7600000DC4D9E /* TrackWorkUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		5F8A730F2FF7600000DC4D9E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		5F8A73252FF7600000DC4D9E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -140,7 +261,44 @@
 			files = (
 			);
 		};
+		5F8A730D2FF7600000DC4D9E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				5F8A73022FF7600000DC4D9E /* AttendanceEnumTests.swift in Sources */,
+				5F8A730A2FF7600000DC4D9E /* AttendanceInferenceServiceTests.swift in Sources */,
+				5F8A73162FF7600000DC4D9E /* DataManagementServiceTests.swift in Sources */,
+				5F8A731A2FF7600000DC4D9E /* CompliancePeriodTests.swift in Sources */,
+				5F8A731B2FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift in Sources */,
+				5F8A731C2FF7600000DC4D9E /* CustomExcludedDayTests.swift in Sources */,
+				5F8A73062FF7600000DC4D9E /* CSVExportServiceTests.swift in Sources */,
+				5F8A73032FF7600000DC4D9E /* ComplianceCalculatorTests.swift in Sources */,
+				5F8A73012FF7600000DC4D9E /* JurisdictionCatalogTests.swift in Sources */,
+				5F8A73042FF7600000DC4D9E /* LocalJSONHolidayProviderTests.swift in Sources */,
+				5F8A73092FF7600000DC4D9E /* LocationEventTests.swift in Sources */,
+				5F8A73072FF7600000DC4D9E /* PDFExportServiceTests.swift in Sources */,
+				5F8A73082FF7600000DC4D9E /* PlaceTests.swift in Sources */,
+				5F8A73052FF7600000DC4D9E /* ReportSnapshotBuilderTests.swift in Sources */,
+			);
+		};
+		5F8A73232FF7600000DC4D9E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5F8A73112FF7600000DC4D9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* TrackWork */;
+			targetProxy = 5F8A73102FF7600000DC4D9E /* PBXContainerItemProxy */;
+		};
+		5F8A73272FF7600000DC4D9E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* TrackWork */;
+			targetProxy = 5F8A73262FF7600000DC4D9E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		000000000000000011000000 /* Debug configuration for PBXProject "TrackWork" */ = {
@@ -278,16 +436,13 @@
 		000000000000000111000000 /* Debug configuration for PBXNativeTarget "TrackWork" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses background location events to automatically record office and home attendance after you enable automatic tracking.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -300,36 +455,33 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 		000000000000000112000000 /* Release configuration for PBXNativeTarget "TrackWork" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses background location events to automatically record office and home attendance after you enable automatic tracking.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -342,20 +494,133 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5F8A73132FF7600000DC4D9E /* Debug configuration for PBXNativeTarget "TrackWorkTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TrackWork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TrackWork";
+				TEST_TARGET_NAME = TrackWork;
+			};
+			name = Debug;
+		};
+		5F8A73142FF7600000DC4D9E /* Release configuration for PBXNativeTarget "TrackWorkTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TrackWork.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TrackWork";
+				TEST_TARGET_NAME = TrackWork;
+			};
+			name = Release;
+		};
+		5F8A73292FF7600000DC4D9E /* Debug configuration for PBXNativeTarget "TrackWorkUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrackWork;
+			};
+			name = Debug;
+		};
+		5F8A732A2FF7600000DC4D9E /* Release configuration for PBXNativeTarget "TrackWorkUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.benchamberlain.worktrack.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TrackWork;
 			};
 			name = Release;
 		};
@@ -375,6 +640,22 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "TrackWork" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "TrackWork" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		5F8A73122FF7600000DC4D9E /* Build configuration list for PBXNativeTarget "TrackWorkTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5F8A73132FF7600000DC4D9E /* Debug configuration for PBXNativeTarget "TrackWorkTests" */,
+				5F8A73142FF7600000DC4D9E /* Release configuration for PBXNativeTarget "TrackWorkTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		5F8A73282FF7600000DC4D9E /* Build configuration list for PBXNativeTarget "TrackWorkUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5F8A73292FF7600000DC4D9E /* Debug configuration for PBXNativeTarget "TrackWorkUITests" */,
+				5F8A732A2FF7600000DC4D9E /* Release configuration for PBXNativeTarget "TrackWorkUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};

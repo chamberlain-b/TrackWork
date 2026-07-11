@@ -1,8 +1,12 @@
 # Holiday Fixture Schema
 
-These JSON files are development and test fixtures for bundled public holiday data. They are not a provider implementation and they do not perform network fetching.
+These JSON files are the app's offline public-holiday calendars. They do not perform network fetching. A file is eligible for compliance calculations only when `verifiedExhaustive` is `true` and its dates have been checked against the named official source.
 
-The fixture files intentionally avoid claiming to be exhaustive. Treat each file as sample data unless the dates and jurisdiction coverage have been verified separately against the named public source.
+The bundled release coverage is calendar year 2026 for every jurisdiction in `JurisdictionCatalog`. Requests for another year fail with a typed missing-data error; they must never be interpreted as a year with zero public holidays.
+
+Australian fixtures contain full-day, state- or territory-wide public holidays. Capital-city, municipal, regional, bank-only, industry-only, and part-day evening holidays are outside the state-level MVP jurisdiction model and are not treated as whole-day compliance exclusions. Where the official source declares an additional or substitute full-day holiday, both dates are included. Victoria uses the statewide Melbourne Cup default; some regional councils substitute another local date.
+
+New Zealand national fixtures include the actual date and an additional observed date when the government publishes both. Regional fixtures contain the government-published observed anniversary date and inherit the national fixture. This ensures a normal weekday work pattern receives the observed exclusion while preserving the published actual date for weekend work patterns.
 
 ## File Naming
 
@@ -38,7 +42,7 @@ Each fixture is a JSON object with these fields:
 | `year` | Number | Yes | Gregorian calendar year covered by the fixture. |
 | `sourceName` | String | Yes | Human-readable source name for the fixture collection. |
 | `sourceURL` | String | Yes | Public URL for the named source. |
-| `verifiedExhaustive` | Boolean | Yes | `true` only when the fixture has been separately verified as exhaustive. Development fixtures should normally use `false`. |
+| `verifiedExhaustive` | Boolean | Yes | Must be `true` for release data after verification against the official source. The provider rejects `false`. |
 | `inheritsFrom` | Array of String | No | Jurisdiction codes whose holidays should be inherited by this fixture. Use this for regional NZ fixtures that build on `NZ-NATIONAL`. |
 | `holidays` | Array | Yes | Holiday entries for this fixture. |
 
@@ -50,8 +54,8 @@ Each item in `holidays` has these fields:
 | --- | --- | --- | --- |
 | `date` | String | Yes | Holiday date in `yyyy-MM-dd` format. |
 | `name` | String | Yes | Display name for the holiday. |
-| `sourceName` | String | Yes | Human-readable source name for this date. |
-| `sourceURL` | String | Yes | Public URL for this date's source. |
+| `sourceName` | String | No | Per-date source override. Defaults to the fixture's source name. |
+| `sourceURL` | String | No | Per-date source override. Defaults to the fixture's source URL. |
 | `notes` | String | No | Short clarification, such as observed-day or fixture-scope notes. |
 
 ## Inheritance
@@ -62,7 +66,7 @@ Regional NZ fixtures can inherit national holidays by declaring:
 "inheritsFrom": ["NZ-NATIONAL"]
 ```
 
-The regional fixture should then list only regional/provincial anniversary dates in its own `holidays` array. Provider code added later can merge inherited holidays with the regional entries and handle duplicate dates deterministically.
+The regional fixture lists only its regional/provincial anniversary date. The provider merges inherited holidays with the regional entry and assigns the selected effective jurisdiction ID to the complete result so downstream jurisdiction filtering cannot discard national holidays.
 
 ## Example
 
@@ -72,16 +76,15 @@ The regional fixture should then list only regional/provincial anniversary dates
   "countryCode": "NZ",
   "jurisdictionCode": "NZ-AUCKLAND",
   "year": 2026,
-  "sourceName": "Employment New Zealand public holidays",
-  "sourceURL": "https://www.employment.govt.nz/leave-and-holidays/public-holidays/public-holidays-and-anniversary-dates/",
-  "verifiedExhaustive": false,
+    "sourceName": "New Zealand Government regional anniversary dates",
+    "sourceURL": "https://www.govt.nz/browse/work/public-holidays-and-work/public-holidays-and-anniversary-dates/",
+    "verifiedExhaustive": true,
   "inheritsFrom": ["NZ-NATIONAL"],
   "holidays": [
     {
       "date": "2026-01-26",
       "name": "Auckland Anniversary Day",
-      "sourceName": "Employment New Zealand public holidays",
-      "sourceURL": "https://www.employment.govt.nz/leave-and-holidays/public-holidays/public-holidays-and-anniversary-dates/"
+      "notes": "Observed date."
     }
   ]
 }

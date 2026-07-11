@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "countryCode": "NZ",
+  "jurisdictionCode": "NZ-OTAGO",
+  "year": 2026,
+  "sourceName": "New Zealand Government regional anniversary dates",
+  "sourceURL": "https://www.govt.nz/browse/work/public-holidays-and-work/public-holidays-and-anniversary-dates/",
+  "verifiedExhaustive": true,
+  "inheritsFrom": ["NZ-NATIONAL"],
+  "holidays": [
+    { "date": "2026-03-23", "name": "Otago Anniversary Day", "notes": "Observed date." }
+  ]
+}

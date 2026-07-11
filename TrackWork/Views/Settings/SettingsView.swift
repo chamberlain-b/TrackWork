@@ -6,13 +6,13 @@ struct SettingsView: View {
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
     private let workdays = [
-        Workday(id: 1, name: "Monday"),
-        Workday(id: 2, name: "Tuesday"),
-        Workday(id: 3, name: "Wednesday"),
-        Workday(id: 4, name: "Thursday"),
-        Workday(id: 5, name: "Friday"),
-        Workday(id: 6, name: "Saturday"),
-        Workday(id: 7, name: "Sunday")
+        SettingsWorkday(id: 1, name: "Monday"),
+        SettingsWorkday(id: 2, name: "Tuesday"),
+        SettingsWorkday(id: 3, name: "Wednesday"),
+        SettingsWorkday(id: 4, name: "Thursday"),
+        SettingsWorkday(id: 5, name: "Friday"),
+        SettingsWorkday(id: 6, name: "Saturday"),
+        SettingsWorkday(id: 7, name: "Sunday")
     ]
 
     private var activeRule: ComplianceRule? {
@@ -92,99 +92,34 @@ struct SettingsView: View {
         )
     }
 
+    private var workdaySelections: [SettingsWorkdaySelection] {
+        workdays.map { workday in
+            SettingsWorkdaySelection(
+                id: workday.id,
+                name: workday.name,
+                isSelected: workdaySelection(for: workday.id)
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    NavigationLink {
-                        LocationSetupView()
-                    } label: {
-                        Label("Location Setup", systemImage: "location.circle")
-                    }
-
-                    #if DEBUG
-                    NavigationLink {
-                        RecentLocationEventsView()
-                    } label: {
-                        Label("Recent Location Events", systemImage: "list.bullet.rectangle")
-                    }
-                    #endif
-                } header: {
-                    Text("Location")
-                } footer: {
-                    Text("Save home and office coordinates for private geofence attendance detection. Manual attendance still works when permission is denied.")
-                }
-
-                Section {
-                    Picker("Country", selection: countrySelection) {
-                        ForEach(Country.allCases) { country in
-                            Text(country.displayName)
-                                .tag(country)
-                        }
-                    }
-
-                    Picker("Jurisdiction", selection: jurisdictionSelection) {
-                        ForEach(availableJurisdictions) { jurisdiction in
-                            Text(jurisdiction.displayName)
-                                .tag(jurisdiction.id)
-                        }
-                    }
-                } header: {
-                    Text("Region")
-                } footer: {
-                    Text("Public holidays and monthly compliance use the selected country and jurisdiction.")
-                }
-
-                Section {
-                    Picker("Requirement type", selection: requirementTypeSelection) {
-                        ForEach(RequirementType.allCases) { requirementType in
-                            Text(requirementType.displayName)
-                                .tag(requirementType)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    if selectedRequirementType == .fixedMonthlyDays {
-                        TextField("Fixed required days", value: fixedRequiredDaysBinding, format: .number)
-                            .keyboardType(.numberPad)
-
-                        Toggle("Prorate fixed target for leave", isOn: prorateFixedTargetBinding)
-                    } else {
-                        TextField(
-                            "Required percentage",
-                            value: requiredPercentageInputBinding,
-                            format: .number.precision(.fractionLength(0...2))
-                        )
-                        .keyboardType(.decimalPad)
-                    }
-                } header: {
-                    Text("Compliance Rule")
-                } footer: {
-                    if selectedRequirementType == .fixedMonthlyDays {
-                        Text("Fixed days must be 0 or greater. Leave prorating is on by default.")
-                    } else {
-                        Text("Enter a percentage from 0 to 100. The stored rule uses the equivalent 0 to 1 value.")
-                    }
-                }
-
-                Section {
-                    TextField("Minimum office minutes", value: minimumOfficeMinutesBinding, format: .number)
-                        .keyboardType(.numberPad)
-                } header: {
-                    Text("Office Day")
-                } footer: {
-                    Text("Minimum office minutes must be 0 or greater.")
-                }
-
-                Section {
-                    ForEach(workdays) { workday in
-                        Toggle(workday.name, isOn: workdaySelection(for: workday.id))
-                    }
-                } header: {
-                    Text("Selected Workdays")
-                } footer: {
-                    Text("At least one workday must remain selected. Monday to Friday is the default.")
-                }
+                SettingsLocationSection()
+                SettingsRegionSection(
+                    availableJurisdictions: availableJurisdictions,
+                    country: countrySelection,
+                    jurisdictionId: jurisdictionSelection
+                )
+                SettingsComplianceRuleSection(
+                    requirementType: requirementTypeSelection,
+                    fixedRequiredDays: fixedRequiredDaysBinding,
+                    requiredPercentageInput: requiredPercentageInputBinding,
+                    prorateFixedTarget: prorateFixedTargetBinding
+                )
+                SettingsOfficeDaySection(minimumOfficeMinutes: minimumOfficeMinutesBinding)
+                SettingsWorkdaysSection(workdays: workdaySelections)
+                SettingsPrivacyDataSection()
             }
             .navigationTitle("Settings")
             .task {
@@ -308,11 +243,6 @@ struct SettingsView: View {
         rule.updatedAt = .now
         try? modelContext.save()
     }
-}
-
-private struct Workday: Identifiable {
-    let id: Int
-    let name: String
 }
 
 #Preview {

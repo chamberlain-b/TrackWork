@@ -40,7 +40,7 @@ struct HolidayFixture: Decodable {
 struct HolidayFixtureEntry: Decodable {
     let date: String
     let name: String
-    let sourceName: String
-    let sourceURL: String
+    let sourceName: String?
+    let sourceURL: String?
     let notes: String?
 }

@@ -37,7 +37,12 @@ struct DSTabBar: View {
             }
         }
         .padding(AppSpacing.xs)
-        .glassSurface(cornerRadius: AppRadius.tabBar)
-        .shadow(color: Color.ds.shadowTint.opacity(AppShadow.elevatedOpacity), radius: AppShadow.elevatedRadius, x: 0, y: AppShadow.elevatedY)
+        .glassSurface(cornerRadius: AppRadius.tabBar, isInteractive: true)
+        .shadow(
+            color: Color.ds.shadowTint.opacity(AppShadow.elevatedOpacity),
+            radius: AppShadow.elevatedRadius,
+            x: 0,
+            y: AppShadow.elevatedY
+        )
     }
 }

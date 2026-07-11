@@ -7,6 +7,7 @@ struct CSVExportService {
         appendSection("Summary", rows: summaryRows(from: snapshot), to: &lines)
         appendSection("Daily Records", rows: dailyRecordRows(from: snapshot), to: &lines)
         appendSection("Leave", rows: leaveRows(from: snapshot), to: &lines)
+        appendSection("Custom Exclusions", rows: customExclusionRows(from: snapshot), to: &lines)
         appendSection("Manual Overrides and Notes", rows: manualOverrideAndNoteRows(from: snapshot), to: &lines)
         appendSection("Public Holidays", rows: publicHolidayRows(from: snapshot), to: &lines)
         appendSection("Settings", rows: settingsRows(from: snapshot), to: &lines)
@@ -16,24 +17,19 @@ struct CSVExportService {
 
     func writeCSV(
         from snapshot: ReportSnapshot,
-        directory: URL = FileManager.default.temporaryDirectory
+        generatedExportStore: GeneratedExportStore = GeneratedExportStore()
     ) throws -> URL {
-        let fileURL = directory.appendingPathComponent(fileName(for: snapshot))
+        let fileURL = try generatedExportStore.fileURL(named: fileName(for: snapshot))
         var data = Data([0xEF, 0xBB, 0xBF])
         data.append(Data(makeCSV(from: snapshot).utf8))
-        try data.write(to: fileURL, options: .atomic)
+        try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         return fileURL
     }
 
     func fileName(for snapshot: ReportSnapshot) -> String {
-        let monthIdentifier: String
-        if let firstISODate = snapshot.dailyRecords.first?.isoDate {
-            monthIdentifier = String(firstISODate.prefix(7))
-        } else {
-            monthIdentifier = monthFormatter.string(from: snapshot.summary.periodStart)
-        }
-
-        return "Work Track \(monthIdentifier) Monthly Report.csv"
+        let start = isoDateFormatter.string(from: snapshot.summary.periodStart)
+        let end = isoDateFormatter.string(from: snapshot.summary.periodEnd)
+        return "Work Track \(start) to \(end) Report.csv"
     }
 
     private func appendSection(_ title: String, rows: [[String]], to lines: inout [String]) {
@@ -59,6 +55,7 @@ struct CSVExportService {
             ["Adjusted required office days", summary.adjustedRequiredOfficeDays.formatted()],
             ["Completed office days", summary.completedOfficeDays.formatted()],
             ["Review required days", summary.reviewRequiredDays.formatted()],
+            ["Custom excluded days", summary.customExcludedDays.formatted()],
             ["Annual leave days", leaveSummary.annualLeaveDays.formatted()],
             ["Sick leave days", leaveSummary.sickLeaveDays.formatted()],
             ["Total leave days", leaveSummary.totalLeaveDays.formatted()]
@@ -76,6 +73,7 @@ struct CSVExportService {
             "Selected workday",
             "Public holiday",
             "Leave",
+            "Custom exclusion",
             "Note"
         ]]
 
@@ -90,7 +88,22 @@ struct CSVExportService {
                 yesNo(row.isSelectedWorkday),
                 yesNo(row.isPublicHoliday),
                 yesNo(row.hasLeave),
+                yesNo(row.isCustomExcluded),
                 note(row.note, in: snapshot)
+            ]
+        }
+
+        return rows
+    }
+
+    private func customExclusionRows(from snapshot: ReportSnapshot) -> [[String]] {
+        var rows = [["Date", "Reduces eligible days", "Reason"]]
+
+        rows += snapshot.customExclusionRows.map { row in
+            [
+                row.isoDate,
+                yesNo(row.reducesEligibleDays),
+                note(row.reason, in: snapshot)
             ]
         }
 
@@ -177,6 +190,7 @@ struct CSVExportService {
             ["Prorate fixed target for leave", yesNo(rule.prorateFixedTargetForLeave)],
             ["Minimum office minutes", rule.minimumOfficeMinutes.formatted()],
             ["Selected ISO weekdays", rule.selectedISOWeekdays.map(String.init).joined(separator: " ")],
+            ["Period boundaries", "Inclusive"],
             ["Notes included", yesNo(snapshot.options.includeNotes)],
             ["Raw location events included", "No"],
             ["GPS coordinates included", "No"]
@@ -196,7 +210,14 @@ struct CSVExportService {
     }
 
     private func escapedField(_ field: String) -> String {
-        let escaped = field.replacingOccurrences(of: "\"", with: "\"\"")
+        let spreadsheetSafeField: String
+        if let firstCharacter = field.first, ["=", "+", "-", "@", "\t", "\r"].contains(firstCharacter) {
+            spreadsheetSafeField = "'" + field
+        } else {
+            spreadsheetSafeField = field
+        }
+
+        let escaped = spreadsheetSafeField.replacingOccurrences(of: "\"", with: "\"\"")
         return "\"\(escaped)\""
     }
 
@@ -218,15 +239,6 @@ struct CSVExportService {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .autoupdatingCurrent
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }
-
-    private var monthFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .autoupdatingCurrent
-        formatter.dateFormat = "yyyy-MM"
         return formatter
     }
 

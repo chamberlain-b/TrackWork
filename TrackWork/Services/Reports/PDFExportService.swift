@@ -6,7 +6,7 @@ struct PDFExportService {
         let pageBounds = CGRect(x: 0, y: 0, width: 612, height: 792)
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [
-            kCGPDFContextTitle as String: "Work Track Monthly Report",
+            kCGPDFContextTitle as String: "Work Track Compliance Report",
             kCGPDFContextCreator as String: "Work Track"
         ]
 
@@ -20,31 +20,27 @@ struct PDFExportService {
 
     func writePDF(
         from snapshot: ReportSnapshot,
-        directory: URL = FileManager.default.temporaryDirectory
+        generatedExportStore: GeneratedExportStore = GeneratedExportStore()
     ) throws -> URL {
-        let fileURL = directory.appendingPathComponent(fileName(for: snapshot))
-        try makePDF(from: snapshot).write(to: fileURL, options: .atomic)
+        let fileURL = try generatedExportStore.fileURL(named: fileName(for: snapshot))
+        try makePDF(from: snapshot).write(to: fileURL, options: [.atomic, .completeFileProtection])
         return fileURL
     }
 
     func fileName(for snapshot: ReportSnapshot) -> String {
-        let monthIdentifier: String
-        if let firstISODate = snapshot.dailyRecords.first?.isoDate {
-            monthIdentifier = String(firstISODate.prefix(7))
-        } else {
-            monthIdentifier = monthFormatter.string(from: snapshot.summary.periodStart)
-        }
-
-        return "Work Track \(monthIdentifier) Monthly Report.pdf"
+        let start = dateFormatter.string(from: snapshot.summary.periodStart)
+        let end = dateFormatter.string(from: snapshot.summary.periodEnd)
+        return "Work Track \(start) to \(end) Report.pdf"
     }
 
     private func drawReport(_ snapshot: ReportSnapshot, in context: inout PDFLayoutContext) {
         let summary = snapshot.summary
         let rule = snapshot.ruleSummary
 
-        context.drawTitle("Work Track Monthly Report")
+        context.drawTitle("Work Track Compliance Report")
         context.drawKeyValueRows([
             ("Period", "\(dateFormatter.string(from: summary.periodStart)) to \(dateFormatter.string(from: summary.periodEnd))"),
+            ("Period boundaries", "Inclusive"),
             ("Jurisdiction", "\(rule.countryCode) / \(rule.jurisdictionId)"),
             ("Generated", timestampFormatter.string(from: summary.generatedAt))
         ])
@@ -72,7 +68,8 @@ struct PDFExportService {
             ("Adjusted eligible days", summary.adjustedEligibleDays.formatted()),
             ("Adjusted required office days", summary.adjustedRequiredOfficeDays.formatted()),
             ("Public holiday exclusions", snapshot.publicHolidayRows.count.formatted()),
-            ("Leave days reducing eligibility", summary.leaveSummary.totalLeaveDays.formatted())
+            ("Leave days reducing eligibility", summary.leaveSummary.totalLeaveDays.formatted()),
+            ("Custom days reducing eligibility", summary.customExcludedDays.formatted())
         ])
 
         context.drawSectionTitle("Leave Summary")
@@ -97,7 +94,7 @@ struct PDFExportService {
 
         context.drawSectionTitle("Day-by-Day Table")
         context.drawTable(
-            columns: ["Date", "Detected", "Final", "Treatment", "Office min", "Home min", "Workday", "Holiday", "Leave", "Note"],
+            columns: ["Date", "Detected", "Final", "Treatment", "Office min", "Home min", "Workday", "Holiday", "Leave", "Excluded", "Note"],
             rows: snapshot.dailyRecords.map { row in
                 [
                     row.isoDate,
@@ -109,10 +106,24 @@ struct PDFExportService {
                     yesNo(row.isSelectedWorkday),
                     yesNo(row.isPublicHoliday),
                     yesNo(row.hasLeave),
+                    yesNo(row.isCustomExcluded),
                     note(row.note, in: snapshot)
                 ]
             },
-            columnWidths: [0.11, 0.10, 0.11, 0.17, 0.08, 0.08, 0.08, 0.08, 0.07, 0.12]
+            columnWidths: [0.10, 0.09, 0.09, 0.15, 0.07, 0.07, 0.08, 0.07, 0.06, 0.08, 0.14]
+        )
+
+        context.drawSectionTitle("Custom Exclusions")
+        context.drawTable(
+            columns: ["Date", "Reduces eligible days", "Reason"],
+            rows: snapshot.customExclusionRows.map { row in
+                [
+                    row.isoDate,
+                    yesNo(row.reducesEligibleDays),
+                    note(row.reason, in: snapshot)
+                ]
+            },
+            columnWidths: [0.18, 0.28, 0.54]
         )
 
         context.drawSectionTitle("Manual Notes and Overrides")
@@ -208,15 +219,6 @@ struct PDFExportService {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = .autoupdatingCurrent
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }
-
-    private var monthFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .autoupdatingCurrent
-        formatter.dateFormat = "yyyy-MM"
         return formatter
     }
 

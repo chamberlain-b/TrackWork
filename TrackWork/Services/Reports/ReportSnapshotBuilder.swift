@@ -7,153 +7,162 @@ enum ReportSnapshotBuilderError: Error, Equatable {
 
 struct ReportSnapshotBuilder {
     struct Input {
-        let month: Date
+        let range: ComplianceDateRange
         let calendar: Calendar
         let rule: ComplianceRule
         let attendanceDays: [AttendanceDay]
         let leaveRecords: [LeaveRecord]
         let manualAdjustments: [ManualAdjustment]
         let publicHolidays: [PublicHoliday]
+        let customExcludedDays: [CustomExcludedDay]
         let options: ReportSnapshot.Options
         let generatedAt: Date
 
         init(
-            month: Date,
+            range: ComplianceDateRange,
             calendar: Calendar,
             rule: ComplianceRule,
             attendanceDays: [AttendanceDay],
             leaveRecords: [LeaveRecord],
             manualAdjustments: [ManualAdjustment],
             publicHolidays: [PublicHoliday],
+            customExcludedDays: [CustomExcludedDay] = [],
             options: ReportSnapshot.Options = ReportSnapshot.Options(),
             generatedAt: Date = .now
         ) {
-            self.month = month
+            self.range = range
             self.calendar = calendar
             self.rule = rule
             self.attendanceDays = attendanceDays
             self.leaveRecords = leaveRecords
             self.manualAdjustments = manualAdjustments
             self.publicHolidays = publicHolidays
+            self.customExcludedDays = customExcludedDays
             self.options = options
             self.generatedAt = generatedAt
         }
     }
 
-    private let complianceCalculator = ComplianceCalculator()
+    private let periodEvaluator = CompliancePeriodEvaluator()
     private let businessDayCalculator = BusinessDayCalculator()
 
     func build(_ input: Input) throws -> ReportSnapshot {
-        guard let period = input.calendar.dateInterval(of: .month, for: input.month),
-              let periodEnd = input.calendar.date(byAdding: .day, value: -1, to: period.end) else {
-            throw ReportSnapshotBuilderError.invalidPeriod
+        let periodStart = input.range.start
+        let periodEnd = input.range.end
+        let periodAttendanceDays = input.attendanceDays.filtered(
+            to: input.range,
+            calendar: input.calendar
+        )
+        let periodLeaveRecords = input.leaveRecords.filtered(
+            to: input.range,
+            calendar: input.calendar
+        )
+        let periodPublicHolidays = input.publicHolidays.filter { holiday in
+            holiday.jurisdictionId == input.rule.jurisdictionId
+                && input.range.contains(holiday.date, calendar: input.calendar)
         }
-
-        let periodStart = input.calendar.startOfDay(for: period.start)
-        let normalizedPeriodEnd = input.calendar.startOfDay(for: periodEnd)
-        let monthAttendanceDays = input.attendanceDays.filteredToMonth(from: periodStart, through: normalizedPeriodEnd, calendar: input.calendar)
-        let monthLeaveRecords = input.leaveRecords.filteredToMonth(from: periodStart, through: normalizedPeriodEnd, calendar: input.calendar)
-        let monthPublicHolidays = input.publicHolidays.filteredToMonth(from: periodStart, through: normalizedPeriodEnd, calendar: input.calendar)
-        let publicHolidayDates = Set(monthPublicHolidays.map { input.calendar.startOfDay(for: $0.date) })
+        let periodCustomExcludedDays = input.customExcludedDays.filtered(
+            to: input.range,
+            calendar: input.calendar
+        )
+        let publicHolidayDates = Set(
+            periodPublicHolidays.map { input.calendar.startOfDay(for: $0.date) }
+        )
+        let customExcludedDates = Set(
+            periodCustomExcludedDays.map { input.calendar.startOfDay(for: $0.date) }
+        )
         let selectedWorkdays = Set(input.rule.selectedISOWeekdays)
         let baseEligibleDates = businessDayCalculator.eligibleDates(
             from: periodStart,
-            through: normalizedPeriodEnd,
+            through: periodEnd,
             calendar: input.calendar,
             selectedISOWeekdays: selectedWorkdays,
             publicHolidays: publicHolidayDates
         )
         let eligibleLeaveDates = eligibleLeaveDates(
-            from: monthLeaveRecords,
+            from: periodLeaveRecords,
             eligibleDates: baseEligibleDates,
             calendar: input.calendar
         )
-        let requirement = try requirement(from: input.rule)
-        let complianceSummary = complianceCalculator.calculate(
-            ComplianceCalculator.Input(
-                periodStart: periodStart,
-                periodEnd: normalizedPeriodEnd,
+        let effectiveCustomExcludedDates = customExcludedDates
+            .intersection(baseEligibleDates)
+            .subtracting(eligibleLeaveDates)
+        let complianceSummary = periodEvaluator.evaluate(
+            CompliancePeriodEvaluator.Input(
+                range: input.range,
                 calendar: input.calendar,
-                selectedISOWeekdays: selectedWorkdays,
-                publicHolidays: publicHolidayDates,
-                leaveRecords: monthLeaveRecords.compactMap { record in
-                    guard let leaveType = record.leaveType,
-                          let duration = record.duration else {
-                        return nil
-                    }
-
-                    return ComplianceCalculator.LeaveRecord(
-                        date: record.date,
-                        type: leaveType,
-                        duration: duration
-                    )
-                },
-                attendanceDays: monthAttendanceDays.compactMap { day in
-                    guard let finalClassification = day.finalClassification else {
-                        return nil
-                    }
-
-                    return ComplianceCalculator.AttendanceDay(
-                        date: day.date,
-                        finalClassification: finalClassification,
-                        officeMinutes: day.officeMinutes
-                    )
-                },
-                requirement: requirement
+                rule: input.rule,
+                attendanceDays: periodAttendanceDays,
+                leaveRecords: periodLeaveRecords,
+                publicHolidays: periodPublicHolidays,
+                customExcludedDays: periodCustomExcludedDays,
+                evaluationDate: input.generatedAt
             )
         )
 
-        let attendanceByDate = Dictionary(grouping: monthAttendanceDays) { input.calendar.startOfDay(for: $0.date) }
-        let leaveByDate = Dictionary(grouping: monthLeaveRecords) { input.calendar.startOfDay(for: $0.date) }
+        let attendanceByDate = Dictionary(grouping: periodAttendanceDays) { input.calendar.startOfDay(for: $0.date) }
+        let leaveByDate = Dictionary(grouping: periodLeaveRecords) { input.calendar.startOfDay(for: $0.date) }
         let dailyRecords = makeDailyRecords(
             periodStart: periodStart,
-            periodEnd: normalizedPeriodEnd,
+            periodEnd: periodEnd,
             calendar: input.calendar,
             selectedISOWeekdays: selectedWorkdays,
             publicHolidayDates: publicHolidayDates,
+            customExcludedDates: customExcludedDates,
+            eligibleLeaveDates: eligibleLeaveDates,
+            effectiveCustomExcludedDates: effectiveCustomExcludedDates,
             attendanceByDate: attendanceByDate,
             leaveByDate: leaveByDate,
+            minimumOfficeMinutes: input.rule.minimumOfficeMinutes,
             includeNotes: input.options.includeNotes
         )
         let manualAdjustmentRows = makeManualAdjustmentRows(
             from: input.manualAdjustments,
-            attendanceDays: monthAttendanceDays,
+            attendanceDays: periodAttendanceDays,
             periodStart: periodStart,
-            periodEnd: normalizedPeriodEnd,
+            periodEnd: periodEnd,
             calendar: input.calendar,
             includeNotes: input.options.includeNotes
         )
         let leaveRows = makeLeaveRows(
-            from: monthLeaveRecords,
+            from: periodLeaveRecords,
             eligibleLeaveDates: eligibleLeaveDates,
             calendar: input.calendar,
             includeNotes: input.options.includeNotes
         )
-        let publicHolidayRows = makePublicHolidayRows(from: monthPublicHolidays, calendar: input.calendar)
+        let customExclusionRows = makeCustomExclusionRows(
+            from: periodCustomExcludedDays,
+            effectiveCustomExcludedDates: effectiveCustomExcludedDates,
+            calendar: input.calendar,
+            includeNotes: input.options.includeNotes
+        )
+        let publicHolidayRows = makePublicHolidayRows(from: periodPublicHolidays, calendar: input.calendar)
         let noteRows = input.options.includeNotes ? makeNoteRows(
-            attendanceDays: monthAttendanceDays,
-            leaveRecords: monthLeaveRecords,
+            attendanceDays: periodAttendanceDays,
+            leaveRecords: periodLeaveRecords,
             manualAdjustments: input.manualAdjustments,
-            attendanceDateById: Dictionary(uniqueKeysWithValues: monthAttendanceDays.map { ($0.id, input.calendar.startOfDay(for: $0.date)) }),
+            attendanceDateById: Dictionary(uniqueKeysWithValues: periodAttendanceDays.map { ($0.id, input.calendar.startOfDay(for: $0.date)) }),
             periodStart: periodStart,
-            periodEnd: normalizedPeriodEnd,
+            periodEnd: periodEnd,
             calendar: input.calendar
         ) : []
 
         return ReportSnapshot(
             summary: ReportSnapshot.Summary(
                 periodStart: periodStart,
-                periodEnd: normalizedPeriodEnd,
+                periodEnd: periodEnd,
                 generatedAt: input.generatedAt,
                 baseEligibleDays: complianceSummary.baseEligibleDays,
                 adjustedEligibleDays: complianceSummary.adjustedEligibleDays,
                 adjustedRequiredOfficeDays: complianceSummary.requiredOfficeDays,
                 completedOfficeDays: complianceSummary.completedOfficeDays,
                 reviewRequiredDays: complianceSummary.reviewRequiredDays,
-                leaveSummary: leaveSummary(from: eligibleLeaveDates, leaveRecords: monthLeaveRecords, calendar: input.calendar)
+                customExcludedDays: complianceSummary.customExcludedDays,
+                leaveSummary: leaveSummary(from: eligibleLeaveDates, leaveRecords: periodLeaveRecords, calendar: input.calendar)
             ),
             dailyRecords: dailyRecords,
             leaveRows: leaveRows,
+            customExclusionRows: customExclusionRows,
             manualAdjustmentRows: manualAdjustmentRows,
             noteRows: noteRows,
             publicHolidayRows: publicHolidayRows,
@@ -168,12 +177,23 @@ struct ReportSnapshotBuilder {
         calendar: Calendar,
         selectedISOWeekdays: Set<Int>,
         publicHolidayDates: Set<Date>,
+        customExcludedDates: Set<Date>,
+        eligibleLeaveDates: Set<Date>,
+        effectiveCustomExcludedDates: Set<Date>,
         attendanceByDate: [Date: [AttendanceDay]],
         leaveByDate: [Date: [LeaveRecord]],
+        minimumOfficeMinutes: Int,
         includeNotes: Bool
     ) -> [ReportSnapshot.DailyRecordRow] {
         dates(from: periodStart, through: periodEnd, calendar: calendar).map { date in
             let attendanceDay = attendanceByDate[date]?.sorted { $0.updatedAt < $1.updatedAt }.last
+            let isSelectedWorkday = selectedISOWeekdays.contains(isoWeekday(for: date, calendar: calendar))
+            let isPublicHoliday = publicHolidayDates.contains(date)
+            let isCustomExcluded = customExcludedDates.contains(date)
+            let isExcludedFromRequirement = !isSelectedWorkday
+                || isPublicHoliday
+                || eligibleLeaveDates.contains(date)
+                || effectiveCustomExcludedDates.contains(date)
             let detectedStatus = attendanceDay?.detectedClassification ?? .unknown
             let finalStatus = attendanceDay?.finalClassification ?? inferredFinalStatus(
                 for: date,
@@ -188,12 +208,19 @@ struct ReportSnapshotBuilder {
                 isoDate: isoDate(from: date, calendar: calendar),
                 detectedStatus: detectedStatus,
                 finalStatus: finalStatus,
-                complianceTreatment: attendanceDay?.complianceTreatment ?? complianceTreatment(for: finalStatus),
+                complianceTreatment: isExcludedFromRequirement
+                    ? .excludedFromRequirement
+                    : ComplianceTreatmentResolver.resolve(
+                        classification: finalStatus,
+                        officeMinutes: attendanceDay?.officeMinutes ?? 0,
+                        minimumOfficeMinutes: minimumOfficeMinutes
+                    ),
                 officeMinutes: attendanceDay?.officeMinutes ?? 0,
                 homeMinutes: attendanceDay?.homeMinutes ?? 0,
-                isSelectedWorkday: selectedISOWeekdays.contains(isoWeekday(for: date, calendar: calendar)),
-                isPublicHoliday: publicHolidayDates.contains(date),
+                isSelectedWorkday: isSelectedWorkday,
+                isPublicHoliday: isPublicHoliday,
                 hasLeave: leaveByDate[date]?.isEmpty == false,
+                isCustomExcluded: isCustomExcluded,
                 note: includeNotes ? attendanceDay?.note : nil
             )
         }
@@ -223,6 +250,31 @@ struct ReportSnapshotBuilder {
             )
         }
         .sorted { $0.date < $1.date }
+    }
+
+    private func makeCustomExclusionRows(
+        from customExcludedDays: [CustomExcludedDay],
+        effectiveCustomExcludedDates: Set<Date>,
+        calendar: Calendar,
+        includeNotes: Bool
+    ) -> [ReportSnapshot.CustomExclusionRow] {
+        customExcludedDays.map { excludedDay in
+            let date = calendar.startOfDay(for: excludedDay.date)
+            return ReportSnapshot.CustomExclusionRow(
+                id: excludedDay.id,
+                date: date,
+                isoDate: isoDate(from: date, calendar: calendar),
+                reducesEligibleDays: effectiveCustomExcludedDates.contains(date),
+                reason: includeNotes ? excludedDay.reason : nil
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.date == rhs.date {
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+
+            return lhs.date < rhs.date
+        }
     }
 
     private func makeManualAdjustmentRows(
@@ -378,19 +430,6 @@ struct ReportSnapshotBuilder {
         return selectedISOWeekdays.contains(isoWeekday(for: date, calendar: calendar)) ? .unknown : .nonWorkingDay
     }
 
-    private func complianceTreatment(for finalStatus: AttendanceClassification) -> ComplianceTreatment {
-        switch finalStatus {
-        case .office:
-            return .countsAsOffice
-        case .home, .mixed:
-            return .countsAsHome
-        case .annualLeave, .sickLeave, .publicHoliday, .weekend, .nonWorkingDay:
-            return .excludedFromRequirement
-        case .unknown:
-            return .requiresReview
-        }
-    }
-
     private func requirement(from rule: ComplianceRule) throws -> ComplianceCalculator.Requirement {
         guard let requirementType = rule.requirementType else {
             throw ReportSnapshotBuilderError.invalidRequirement
@@ -481,28 +520,19 @@ struct ReportSnapshotBuilder {
 }
 
 private extension Array where Element == AttendanceDay {
-    func filteredToMonth(from periodStart: Date, through periodEnd: Date, calendar: Calendar) -> [AttendanceDay] {
-        filter { day in
-            let date = calendar.startOfDay(for: day.date)
-            return date >= periodStart && date <= periodEnd
-        }
+    func filtered(to range: ComplianceDateRange, calendar: Calendar) -> [AttendanceDay] {
+        filter { range.contains($0.date, calendar: calendar) }
     }
 }
 
 private extension Array where Element == LeaveRecord {
-    func filteredToMonth(from periodStart: Date, through periodEnd: Date, calendar: Calendar) -> [LeaveRecord] {
-        filter { record in
-            let date = calendar.startOfDay(for: record.date)
-            return date >= periodStart && date <= periodEnd
-        }
+    func filtered(to range: ComplianceDateRange, calendar: Calendar) -> [LeaveRecord] {
+        filter { range.contains($0.date, calendar: calendar) }
     }
 }
 
-private extension Array where Element == PublicHoliday {
-    func filteredToMonth(from periodStart: Date, through periodEnd: Date, calendar: Calendar) -> [PublicHoliday] {
-        filter { holiday in
-            let date = calendar.startOfDay(for: holiday.date)
-            return date >= periodStart && date <= periodEnd
-        }
+private extension Array where Element == CustomExcludedDay {
+    func filtered(to range: ComplianceDateRange, calendar: Calendar) -> [CustomExcludedDay] {
+        filter { range.contains($0.date, calendar: calendar) }
     }
 }

@@ -66,10 +66,11 @@ extension AttendanceDay {
     func applyManualEdit(
         finalClassification: AttendanceClassification,
         note: String?,
+        isManualOverride: Bool = true,
         updatedAt: Date = .now
     ) {
         finalClassificationRaw = finalClassification.rawValue
-        manualClassificationRaw = finalClassification.rawValue
+        manualClassificationRaw = isManualOverride ? finalClassification.rawValue : nil
         self.note = note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         self.updatedAt = updatedAt
     }

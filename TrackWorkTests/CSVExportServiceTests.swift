@@ -27,10 +27,13 @@ final class CSVExportServiceTests: XCTestCase {
         XCTAssertTrue(csv.contains("\"Summary\""))
         XCTAssertTrue(csv.contains("\"Daily Records\""))
         XCTAssertTrue(csv.contains("\"Leave\""))
+        XCTAssertTrue(csv.contains("\"Custom Exclusions\""))
         XCTAssertTrue(csv.contains("\"Manual Overrides and Notes\""))
         XCTAssertTrue(csv.contains("\"Public Holidays\""))
         XCTAssertTrue(csv.contains("\"Settings\""))
         XCTAssertTrue(csv.contains("\"Adjusted required office days\",\"9\""))
+        XCTAssertTrue(csv.contains("\"Custom excluded days\",\"1\""))
+        XCTAssertTrue(csv.contains("\"2026-07-08\",\"Yes\",\"Company closure details\""))
     }
 
     func testCSVEscapesSpreadsheetFields() {
@@ -38,6 +41,7 @@ final class CSVExportServiceTests: XCTestCase {
 
         XCTAssertTrue(csv.contains("\"Worked from client office, level 2\""))
         XCTAssertTrue(csv.contains("\"Example \"\"special\"\" holiday\""))
+        XCTAssertTrue(csv.contains("\"'=HYPERLINK(\"\"https://example.com\"\")\""))
     }
 
     func testCSVExcludesNotesWhenIncludeNotesIsFalse() {
@@ -46,11 +50,34 @@ final class CSVExportServiceTests: XCTestCase {
         XCTAssertFalse(csv.contains("Worked from client office, level 2"))
         XCTAssertFalse(csv.contains("Leave note that should stay private"))
         XCTAssertFalse(csv.contains("Manual note that should stay private"))
+        XCTAssertFalse(csv.contains("Company closure details"))
         XCTAssertTrue(csv.contains("\"Notes included\",\"No\""))
     }
 
-    func testGeneratedFilenameUsesReportMonth() {
-        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "Work Track 2026-07 Monthly Report.csv")
+    func testGeneratedFilenameUsesInclusiveReportRange() {
+        XCTAssertEqual(
+            service.fileName(for: snapshot(includeNotes: true)),
+            "Work Track 2026-07-01 to 2026-07-31 Report.csv"
+        )
+    }
+
+    func testWrittenCSVUsesManagedDirectoryAndCanBeRemoved() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CSVExportServiceTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent(GeneratedExportStore.directoryName, isDirectory: true)
+        let exportStore = GeneratedExportStore(directoryURL: directory)
+        defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
+
+        let fileURL = try service.writeCSV(
+            from: snapshot(includeNotes: false),
+            generatedExportStore: exportStore
+        )
+
+        XCTAssertEqual(fileURL.deletingLastPathComponent(), directory)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+
+        try exportStore.removeAllFiles()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
 
     private func snapshot(includeNotes: Bool) -> ReportSnapshot {
@@ -70,6 +97,7 @@ final class CSVExportServiceTests: XCTestCase {
                 adjustedRequiredOfficeDays: 9,
                 completedOfficeDays: 7,
                 reviewRequiredDays: 1,
+                customExcludedDays: 1,
                 leaveSummary: ReportSnapshot.LeaveSummary(
                     annualLeaveDays: 3,
                     sickLeaveDays: 1,
@@ -89,6 +117,7 @@ final class CSVExportServiceTests: XCTestCase {
                     isSelectedWorkday: true,
                     isPublicHoliday: false,
                     hasLeave: false,
+                    isCustomExcluded: false,
                     note: "Worked from client office, level 2"
                 )
             ],
@@ -101,6 +130,15 @@ final class CSVExportServiceTests: XCTestCase {
                     duration: .fullDay,
                     countsAgainstEligibleDay: true,
                     note: "Leave note that should stay private"
+                )
+            ],
+            customExclusionRows: [
+                ReportSnapshot.CustomExclusionRow(
+                    id: UUID(),
+                    date: date("2026-07-08"),
+                    isoDate: "2026-07-08",
+                    reducesEligibleDays: true,
+                    reason: includeNotes ? "Company closure details" : nil
                 )
             ],
             manualAdjustmentRows: [
@@ -120,6 +158,13 @@ final class CSVExportServiceTests: XCTestCase {
                     isoDate: "2026-07-06",
                     source: .attendanceDay,
                     text: "Worked from client office, level 2"
+                ),
+                ReportSnapshot.NoteRow(
+                    id: UUID(),
+                    date: date("2026-07-07"),
+                    isoDate: "2026-07-07",
+                    source: .attendanceDay,
+                    text: "=HYPERLINK(\"https://example.com\")"
                 )
             ],
             publicHolidayRows: [

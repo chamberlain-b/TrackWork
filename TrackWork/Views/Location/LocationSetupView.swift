@@ -1,13 +1,9 @@
-import CoreLocation
 import SwiftData
 import SwiftUI
-import UIKit
 
 struct LocationSetupView: View {
-    @Environment(\.openURL) private var openURL
     @Environment(LocationTrackingService.self) private var locationTrackingService
     @Query(sort: \Place.typeRaw) private var places: [Place]
-    @State private var locationAuthorizationService = LocationAuthorizationService()
 
     private var homePlace: Place? {
         place(for: .home)
@@ -20,42 +16,20 @@ struct LocationSetupView: View {
     var body: some View {
         List {
             Section {
-                permissionStatusRow
-
-                Button {
-                    locationAuthorizationService.requestWhenInUseAuthorization()
+                LabeledContent {
+                    Text("Unavailable")
+                        .foregroundStyle(Color.ds.textSecondary)
                 } label: {
-                    Label("Allow While Using App", systemImage: "location")
-                }
-                .disabled(!locationAuthorizationService.canRequestWhenInUseAuthorization || locationAuthorizationService.isRequestingAuthorization)
-                .accessibilityIdentifier("locationAuthorization.requestWhenInUse")
-
-                if shouldShowSettingsLink {
-                    Button {
-                        openAppSettings()
-                    } label: {
-                        Label("Open iOS Settings", systemImage: "gearshape")
-                    }
-                    .accessibilityIdentifier("locationAuthorization.openSettings")
+                    Label("Background location", systemImage: "location.slash")
                 }
             } header: {
-                Text("Location Access")
+                Text("Automatic Detection")
             } footer: {
-                Text("Work Track uses location only after you choose to allow it. Saved home and office places can be monitored with geofences; manual attendance still works without permission.")
-            }
-
-            Section {
-                Button {
-                    locationAuthorizationService.requestAlwaysAuthorizationIfAvailable()
-                } label: {
-                    Label("Background Location Not Enabled", systemImage: "location.fill")
-                }
-                .disabled(!locationAuthorizationService.canRequestAlwaysAuthorization || locationAuthorizationService.isRequestingAuthorization)
-                .accessibilityIdentifier("locationAuthorization.requestAlways")
-            } header: {
-                Text("Background Access")
-            } footer: {
-                Text("Background location is intentionally unavailable in this MVP build. Work Track can still use saved places for foreground setup and manual attendance remains available.")
+                Text(
+                    "Automatic location detection and permission requests are intentionally unavailable in this "
+                        + "MVP build. Save places by entering coordinates or choosing a point on the map; manual "
+                        + "attendance remains available."
+                )
             }
 
             Section {
@@ -70,127 +44,7 @@ struct LocationSetupView: View {
         .navigationTitle("Location Setup")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            locationAuthorizationService.refreshAuthorizationStatus()
             locationTrackingService.refreshMonitoring(for: places)
-        }
-        .onChange(of: authorizationStatus) { _, _ in
-            locationTrackingService.refreshMonitoring(for: places)
-        }
-    }
-
-    private var permissionStatusRow: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: statusSystemImage)
-                .foregroundStyle(statusIconColor)
-                .frame(width: 32, height: 32)
-                .background(statusIconColor.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Permission")
-                        .font(AppTypography.headline)
-                        .foregroundStyle(Color.ds.textPrimary)
-
-                    Spacer()
-
-                    DSStatusPill(
-                        text: statusTitle,
-                        style: statusPillStyle
-                    )
-                }
-
-                Text(statusDescription)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Location permission: \(statusTitle). \(statusDescription)")
-        .accessibilityIdentifier("locationAuthorization.status")
-    }
-
-    private var authorizationStatus: CLAuthorizationStatus {
-        locationAuthorizationService.authorizationStatus
-    }
-
-    private var shouldShowSettingsLink: Bool {
-        authorizationStatus == .denied || authorizationStatus == .restricted
-    }
-
-    private var statusTitle: String {
-        switch authorizationStatus {
-        case .notDetermined:
-            "Not requested"
-        case .restricted:
-            "Restricted"
-        case .denied:
-            "Denied"
-        case .authorizedAlways:
-            "Always allowed"
-        case .authorizedWhenInUse:
-            "Allowed while using"
-        @unknown default:
-            "Unknown"
-        }
-    }
-
-    private var statusDescription: String {
-        switch authorizationStatus {
-        case .notDetermined:
-            "Location access has not been requested. Work Track will ask only when you choose to enable it."
-        case .restricted:
-            "Location access is restricted on this device. Check Screen Time, device management, or parental controls."
-        case .denied:
-            "Location access is off for Work Track. You can change this later in iOS Settings."
-        case .authorizedAlways:
-            "Work Track has Always permission from iOS, but this MVP build does not enable background tracking."
-        case .authorizedWhenInUse:
-            "Work Track can use location while the app is open. Background tracking is unavailable in this MVP build."
-        @unknown default:
-            "Work Track cannot identify the current location permission state."
-        }
-    }
-
-    private var statusSystemImage: String {
-        switch authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
-            "checkmark.circle.fill"
-        case .denied, .restricted:
-            "exclamationmark.triangle.fill"
-        case .notDetermined:
-            "location.circle"
-        @unknown default:
-            "questionmark.circle"
-        }
-    }
-
-    private var statusPillStyle: DSStatusPillStyle {
-        switch authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
-            .success
-        case .denied, .restricted:
-            .warning
-        case .notDetermined:
-            .neutral
-        @unknown default:
-            .neutral
-        }
-    }
-
-    private var statusIconColor: Color {
-        switch statusPillStyle {
-        case .success:
-            Color.ds.success
-        case .warning:
-            Color.ds.warning
-        case .critical:
-            Color.ds.critical
-        case .info:
-            Color.ds.info
-        case .neutral:
-            Color.ds.textTertiary
         }
     }
 
@@ -231,16 +85,10 @@ struct LocationSetupView: View {
             return "Not configured"
         }
 
-        return "\(place.latitude.formatted(.number.precision(.fractionLength(4)))), \(place.longitude.formatted(.number.precision(.fractionLength(4)))) - \(place.radiusMeters.formatted(.number.precision(.fractionLength(0)))) m"
+        let radius = place.radiusMeters.formatted(.number.precision(.fractionLength(0)))
+        return "Saved place · \(radius) m radius"
     }
 
-    private func openAppSettings() {
-        guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
-            return
-        }
-
-        openURL(settingsURL)
-    }
 }
 
 #Preview {

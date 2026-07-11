@@ -22,18 +22,19 @@ final class PDFExportServiceTests: XCTestCase {
         super.tearDown()
     }
 
-    func testPDFIncludesRequiredMonthlyReportSectionsAndAdjustedCounts() throws {
+    func testPDFIncludesRequiredReportSectionsAndAdjustedCounts() throws {
         let data = service.makePDF(from: snapshot(includeNotes: true))
         let text = try extractedText(from: data)
 
         XCTAssertTrue(data.starts(with: Data("%PDF".utf8)))
-        XCTAssertTrue(text.contains("Work Track Monthly Report"))
+        XCTAssertTrue(text.contains("Work Track Compliance Report"))
         XCTAssertTrue(text.contains("Period"))
         XCTAssertTrue(text.contains("Jurisdiction"))
         XCTAssertTrue(text.contains("Compliance Rule Summary"))
         XCTAssertTrue(text.contains("Compliance Result"))
         XCTAssertTrue(text.contains("Business Day Calculation"))
         XCTAssertTrue(text.contains("Leave Summary"))
+        XCTAssertTrue(text.contains("Custom Exclusions"))
         XCTAssertTrue(text.contains("Day-by-Day Table"))
         XCTAssertTrue(text.contains("Manual Notes and Overrides"))
         XCTAssertTrue(text.contains("Public Holiday Source Summary"))
@@ -41,6 +42,7 @@ final class PDFExportServiceTests: XCTestCase {
         XCTAssertTrue(text.contains("Adjusted required office days"))
         XCTAssertTrue(text.contains("19"))
         XCTAssertTrue(text.contains("9"))
+        XCTAssertTrue(text.contains("Company closure details"))
         XCTAssertTrue(text.contains("Raw location events included"))
         XCTAssertTrue(text.contains("GPS coordinates included"))
     }
@@ -51,12 +53,35 @@ final class PDFExportServiceTests: XCTestCase {
         XCTAssertFalse(text.contains("Worked from client office, level 2"))
         XCTAssertFalse(text.contains("Leave note that should stay private"))
         XCTAssertFalse(text.contains("Manual note that should stay private"))
+        XCTAssertFalse(text.contains("Company closure details"))
         XCTAssertTrue(text.contains("Notes included"))
         XCTAssertTrue(text.contains("No"))
     }
 
-    func testGeneratedFilenameUsesReportMonth() {
-        XCTAssertEqual(service.fileName(for: snapshot(includeNotes: true)), "Work Track 2026-07 Monthly Report.pdf")
+    func testGeneratedFilenameUsesInclusiveReportRange() {
+        XCTAssertEqual(
+            service.fileName(for: snapshot(includeNotes: true)),
+            "Work Track 2026-07-01 to 2026-07-31 Report.pdf"
+        )
+    }
+
+    func testWrittenPDFUsesManagedDirectoryAndCanBeRemoved() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PDFExportServiceTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent(GeneratedExportStore.directoryName, isDirectory: true)
+        let exportStore = GeneratedExportStore(directoryURL: directory)
+        defer { try? FileManager.default.removeItem(at: directory.deletingLastPathComponent()) }
+
+        let fileURL = try service.writePDF(
+            from: snapshot(includeNotes: false),
+            generatedExportStore: exportStore
+        )
+
+        XCTAssertEqual(fileURL.deletingLastPathComponent(), directory)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+
+        try exportStore.removeAllFiles()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
 
     private func extractedText(from data: Data) throws -> String {
@@ -81,6 +106,7 @@ final class PDFExportServiceTests: XCTestCase {
                 adjustedRequiredOfficeDays: 9,
                 completedOfficeDays: 7,
                 reviewRequiredDays: 1,
+                customExcludedDays: 1,
                 leaveSummary: ReportSnapshot.LeaveSummary(
                     annualLeaveDays: 3,
                     sickLeaveDays: 1,
@@ -100,6 +126,7 @@ final class PDFExportServiceTests: XCTestCase {
                     isSelectedWorkday: true,
                     isPublicHoliday: false,
                     hasLeave: false,
+                    isCustomExcluded: false,
                     note: "Worked from client office, level 2"
                 )
             ],
@@ -112,6 +139,15 @@ final class PDFExportServiceTests: XCTestCase {
                     duration: .fullDay,
                     countsAgainstEligibleDay: true,
                     note: "Leave note that should stay private"
+                )
+            ],
+            customExclusionRows: [
+                ReportSnapshot.CustomExclusionRow(
+                    id: UUID(),
+                    date: date("2026-07-08"),
+                    isoDate: "2026-07-08",
+                    reducesEligibleDays: true,
+                    reason: includeNotes ? "Company closure details" : nil
                 )
             ],
             manualAdjustmentRows: [

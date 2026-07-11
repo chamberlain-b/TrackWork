@@ -93,7 +93,7 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(inference.homeMinutes, 30)
         XCTAssertEqual(inference.detectedClassification, .mixed)
         XCTAssertEqual(inference.finalClassification, .mixed)
-        XCTAssertEqual(inference.complianceTreatment, .countsAsHome)
+        XCTAssertEqual(inference.complianceTreatment, .countsAsOffice)
     }
 
     func testManualOverrideIsNotOverwrittenDuringRecalculation() {
@@ -119,6 +119,7 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(attendanceDay.detectedClassification, .unknown)
         XCTAssertEqual(attendanceDay.finalClassification, .office)
         XCTAssertEqual(attendanceDay.manualClassification, .office)
+        XCTAssertEqual(attendanceDay.complianceTreatment, .countsAsOffice)
     }
 
     func testLeaveDayRemainsExcludedEvenWhenLocationEventsExist() throws {
@@ -163,6 +164,66 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(inference.detectedClassification, .office)
         XCTAssertEqual(inference.finalClassification, .publicHoliday)
         XCTAssertEqual(inference.complianceTreatment, .excludedFromRequirement)
+    }
+
+    func testCustomExclusionKeepsDetectedStatusAndForcesNonWorkingTreatment() throws {
+        let excludedDay = CustomExcludedDay(
+            date: day("2026-07-06"),
+            reason: "Company closure"
+        )
+        let inferences = service.inferDailyAttendance(
+            from: [
+                event(.office, .entered, "2026-07-06 09:00"),
+                event(.office, .exited, "2026-07-06 13:00")
+            ],
+            periodStart: day("2026-07-06"),
+            periodEnd: day("2026-07-06"),
+            customExcludedDays: [excludedDay]
+        )
+
+        let inference = try XCTUnwrap(inferences.first)
+        XCTAssertEqual(inference.officeMinutes, 240)
+        XCTAssertEqual(inference.detectedClassification, .office)
+        XCTAssertEqual(inference.finalClassification, .nonWorkingDay)
+        XCTAssertEqual(inference.complianceTreatment, .excludedFromRequirement)
+    }
+
+    func testRecalculationHonorsCustomExclusionWithManualStatusAndRestoresItAfterRemoval() {
+        let attendanceDay = AttendanceDay(
+            date: day("2026-07-06"),
+            detectedClassification: .unknown,
+            finalClassification: .home,
+            manualClassification: .home,
+            complianceTreatment: .countsAsHome
+        )
+        let events = [
+            event(.office, .entered, "2026-07-06 09:00"),
+            event(.office, .exited, "2026-07-06 13:00")
+        ]
+        let excludedDay = CustomExcludedDay(date: day("2026-07-06"))
+
+        service.recalculateAttendanceDays(
+            [attendanceDay],
+            events: events,
+            customExcludedDays: [excludedDay],
+            updatedAt: dateTime("2026-07-06 13:00")
+        )
+
+        XCTAssertEqual(attendanceDay.detectedClassification, .office)
+        XCTAssertEqual(attendanceDay.finalClassification, .nonWorkingDay)
+        XCTAssertEqual(attendanceDay.manualClassification, .home)
+        XCTAssertEqual(attendanceDay.complianceTreatment, .excludedFromRequirement)
+
+        service.recalculateAttendanceDays(
+            [attendanceDay],
+            events: events,
+            updatedAt: dateTime("2026-07-06 14:00")
+        )
+
+        XCTAssertEqual(attendanceDay.detectedClassification, .office)
+        XCTAssertEqual(attendanceDay.finalClassification, .home)
+        XCTAssertEqual(attendanceDay.manualClassification, .home)
+        XCTAssertEqual(attendanceDay.complianceTreatment, .countsAsHome)
     }
 
     func testRecalculateAffectedAttendanceDayRecordsWhenEventsChange() {

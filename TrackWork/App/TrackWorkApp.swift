@@ -3,18 +3,12 @@ import SwiftUI
 
 @main
 struct TrackWorkApp: App {
+    private let modelContainer = AppModelContainer.make()
+
     var body: some Scene {
         WindowGroup {
             AppRouter()
         }
-        .modelContainer(for: [
-            AttendanceDay.self,
-            LeaveRecord.self,
-            ManualAdjustment.self,
-            ComplianceRule.self,
-            Place.self,
-            LocationEvent.self,
-            PublicHoliday.self
-        ])
+        .modelContainer(modelContainer)
     }
 }

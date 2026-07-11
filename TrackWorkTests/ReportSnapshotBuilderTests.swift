@@ -45,12 +45,17 @@ final class ReportSnapshotBuilderTests: XCTestCase {
             reason: .manualCorrection,
             note: "Corrected after review"
         )
+        let customExcludedDay = CustomExcludedDay(
+            date: date("2026-07-08"),
+            reason: "Private closure reason"
+        )
 
         let snapshot = try builder.build(
             input(
                 attendanceDays: [attendanceDay],
                 leaveRecords: [leaveRecord],
                 manualAdjustments: [manualAdjustment],
+                customExcludedDays: [customExcludedDay],
                 options: ReportSnapshot.Options(includeNotes: false)
             )
         )
@@ -58,6 +63,7 @@ final class ReportSnapshotBuilderTests: XCTestCase {
         XCTAssertTrue(snapshot.noteRows.isEmpty)
         XCTAssertNil(snapshot.dailyRecords.first { $0.isoDate == "2026-07-06" }?.note)
         XCTAssertNil(snapshot.leaveRows.first?.note)
+        XCTAssertNil(snapshot.customExclusionRows.first?.reason)
         XCTAssertNil(snapshot.manualAdjustmentRows.first?.note)
     }
 
@@ -93,6 +99,134 @@ final class ReportSnapshotBuilderTests: XCTestCase {
         XCTAssertEqual(snapshot.summary.baseEligibleDays, 23)
         XCTAssertEqual(snapshot.summary.adjustedEligibleDays, 19)
         XCTAssertEqual(snapshot.summary.adjustedRequiredOfficeDays, 9)
+    }
+
+    func testSummaryCountsMissingEligibleDaysBeforeGenerationDateAsReviewRequired() throws {
+        let snapshot = try builder.build(
+            input(
+                attendanceDays: [
+                    attendance("2026-07-01", classification: .office),
+                    attendance("2026-07-02", classification: .home)
+                ],
+                generatedAt: date("2026-07-07")
+            )
+        )
+
+        XCTAssertEqual(snapshot.summary.reviewRequiredDays, 2)
+    }
+
+    func testSummaryExcludesFutureOfficeAttendanceFromCompletedDays() throws {
+        let snapshot = try builder.build(
+            input(
+                attendanceDays: [
+                    attendance("2026-07-07", classification: .office),
+                    attendance("2026-07-08", classification: .office)
+                ],
+                generatedAt: date("2026-07-07")
+            )
+        )
+
+        XCTAssertEqual(snapshot.summary.completedOfficeDays, 1)
+    }
+
+    func testMixedDayTreatmentMatchesOfficeMinuteThresholdAndComplianceTotal() throws {
+        let mixedDay = AttendanceDay(
+            date: date("2026-07-06"),
+            detectedClassification: .mixed,
+            finalClassification: .mixed,
+            complianceTreatment: .countsAsHome,
+            officeMinutes: 180,
+            homeMinutes: 60
+        )
+
+        let snapshot = try builder.build(input(attendanceDays: [mixedDay]))
+        let row = try XCTUnwrap(snapshot.dailyRecords.first { $0.isoDate == "2026-07-06" })
+
+        XCTAssertEqual(snapshot.summary.completedOfficeDays, 1)
+        XCTAssertEqual(row.finalStatus, .mixed)
+        XCTAssertEqual(row.complianceTreatment, .countsAsOffice)
+    }
+
+    func testCustomExclusionUsesPeriodEvaluatorTotalsAndAppearsInBothReportSections() throws {
+        let excludedDay = CustomExcludedDay(
+            date: date("2026-07-06"),
+            reason: "Company closure"
+        )
+
+        let snapshot = try builder.build(
+            input(
+                attendanceDays: [attendance("2026-07-06", classification: .office)],
+                customExcludedDays: [excludedDay]
+            )
+        )
+        let dailyRow = try XCTUnwrap(snapshot.dailyRecords.first { $0.isoDate == "2026-07-06" })
+        let exclusionRow = try XCTUnwrap(snapshot.customExclusionRows.first)
+
+        XCTAssertEqual(snapshot.summary.baseEligibleDays, 23)
+        XCTAssertEqual(snapshot.summary.adjustedEligibleDays, 22)
+        XCTAssertEqual(snapshot.summary.customExcludedDays, 1)
+        XCTAssertEqual(snapshot.summary.completedOfficeDays, 0)
+        XCTAssertTrue(dailyRow.isCustomExcluded)
+        XCTAssertEqual(dailyRow.complianceTreatment, .excludedFromRequirement)
+        XCTAssertEqual(exclusionRow.isoDate, "2026-07-06")
+        XCTAssertTrue(exclusionRow.reducesEligibleDays)
+        XCTAssertEqual(exclusionRow.reason, "Company closure")
+    }
+
+    func testNonMonthRangeIsInclusiveAndFiltersToActiveJurisdictionHolidays() throws {
+        let range = ComplianceDateRange(
+            start: date("2026-06-29"),
+            end: date("2026-07-03"),
+            calendar: calendar
+        )
+        let activeHoliday = PublicHoliday(
+            date: date("2026-07-01"),
+            name: "Active holiday",
+            country: .australia,
+            jurisdictionId: "AU-VIC",
+            isRegional: false,
+            sourceName: "Fixture"
+        )
+        let otherHoliday = PublicHoliday(
+            date: date("2026-07-02"),
+            name: "Other jurisdiction holiday",
+            country: .australia,
+            jurisdictionId: "AU-NSW",
+            isRegional: false,
+            sourceName: "Fixture"
+        )
+        let rule = ComplianceRule(
+            country: .australia,
+            jurisdictionId: "AU-VIC",
+            requirementType: .percentageOfEligibleDays,
+            fixedRequiredDays: nil,
+            requiredPercentage: 0.5,
+            selectedISOWeekdays: [1, 2, 3, 4, 5]
+        )
+
+        let snapshot = try builder.build(
+            input(
+                range: range,
+                rule: rule,
+                attendanceDays: [
+                    attendance("2026-06-29", classification: .office),
+                    attendance("2026-07-03", classification: .office),
+                    attendance("2026-07-06", classification: .office)
+                ],
+                publicHolidays: [activeHoliday, otherHoliday],
+                generatedAt: date("2026-07-03")
+            )
+        )
+
+        XCTAssertEqual(snapshot.summary.periodStart, date("2026-06-29"))
+        XCTAssertEqual(snapshot.summary.periodEnd, date("2026-07-03"))
+        XCTAssertEqual(snapshot.dailyRecords.count, 5)
+        XCTAssertEqual(snapshot.dailyRecords.first?.isoDate, "2026-06-29")
+        XCTAssertEqual(snapshot.dailyRecords.last?.isoDate, "2026-07-03")
+        XCTAssertEqual(snapshot.summary.baseEligibleDays, 4)
+        XCTAssertEqual(snapshot.summary.adjustedRequiredOfficeDays, 2)
+        XCTAssertEqual(snapshot.summary.completedOfficeDays, 2)
+        XCTAssertEqual(snapshot.publicHolidayRows.map(\.name), ["Active holiday"])
     }
 
     func testSnapshotBuildsDailyHolidayLeaveOverrideAndRuleRowsForMonth() throws {
@@ -142,16 +276,24 @@ final class ReportSnapshotBuilderTests: XCTestCase {
     }
 
     private func input(
+        range: ComplianceDateRange? = nil,
+        rule: ComplianceRule? = nil,
         attendanceDays: [AttendanceDay] = [],
         leaveRecords: [LeaveRecord] = [],
         manualAdjustments: [ManualAdjustment] = [],
         publicHolidays: [PublicHoliday] = [],
-        options: ReportSnapshot.Options = ReportSnapshot.Options(includeNotes: true)
+        customExcludedDays: [CustomExcludedDay] = [],
+        options: ReportSnapshot.Options = ReportSnapshot.Options(includeNotes: true),
+        generatedAt: Date? = nil
     ) -> ReportSnapshotBuilder.Input {
         ReportSnapshotBuilder.Input(
-            month: date("2026-07-01"),
+            range: range ?? ComplianceDateRange(
+                start: date("2026-07-01"),
+                end: date("2026-07-31"),
+                calendar: calendar
+            ),
             calendar: calendar,
-            rule: ComplianceRule(
+            rule: rule ?? ComplianceRule(
                 country: .australia,
                 jurisdictionId: "AU-VIC",
                 requirementType: .fixedMonthlyDays,
@@ -164,8 +306,23 @@ final class ReportSnapshotBuilderTests: XCTestCase {
             leaveRecords: leaveRecords,
             manualAdjustments: manualAdjustments,
             publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays,
             options: options,
-            generatedAt: date("2026-07-31")
+            generatedAt: generatedAt ?? date("2026-07-31")
+        )
+    }
+
+    private func attendance(
+        _ isoDate: String,
+        classification: AttendanceClassification
+    ) -> AttendanceDay {
+        AttendanceDay(
+            date: date(isoDate),
+            detectedClassification: classification,
+            finalClassification: classification,
+            complianceTreatment: classification == .office ? .countsAsOffice : .countsAsHome,
+            officeMinutes: classification == .office ? 180 : 0,
+            homeMinutes: classification == .home ? 180 : 0
         )
     }
 

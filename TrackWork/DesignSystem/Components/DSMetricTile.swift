@@ -15,6 +15,7 @@ struct DSMetricTile: View {
                     .foregroundStyle(statusColor)
                     .frame(width: 30, height: 30)
                     .background(statusColor.opacity(0.1), in: Circle())
+                    .accessibilityHidden(true)
 
                 Spacer(minLength: AppSpacing.xs)
             }
@@ -23,20 +24,18 @@ struct DSMetricTile: View {
                 Text(label)
                     .font(AppTypography.captionStrong)
                     .foregroundStyle(Color.ds.textSecondary)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text(value)
                     .font(AppTypography.smallMetric.monospacedDigit())
                     .foregroundStyle(Color.ds.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let subtitle {
                     Text(subtitle)
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.textTertiary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -48,5 +47,14 @@ struct DSMetricTile: View {
             RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
                 .stroke(Color.ds.borderSubtle.opacity(0.62), lineWidth: 1)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(accessibilityValue))
+    }
+
+    private var accessibilityValue: String {
+        [value, subtitle]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 }
