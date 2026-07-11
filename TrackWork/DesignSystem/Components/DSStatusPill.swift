@@ -39,7 +39,7 @@ struct DSStatusPill: View {
         Label {
             Text(text)
                 .font(AppTypography.captionStrong)
-                .lineLimit(2)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(Color.ds.textPrimary)
         } icon: {

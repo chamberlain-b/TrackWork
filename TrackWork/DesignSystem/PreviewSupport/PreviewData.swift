@@ -3,6 +3,8 @@ import SwiftData
 
 /// Deterministic sample data for SwiftUI previews and local development only.
 enum PreviewData {
+    static let dashboardReferenceDate = date(year: 2026, month: 7, day: 15)
+
     static let sampleMonth = DateInterval(
         start: date(year: 2026, month: 7, day: 1),
         end: date(year: 2026, month: 8, day: 1)

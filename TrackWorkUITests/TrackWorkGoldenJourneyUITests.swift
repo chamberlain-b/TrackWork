@@ -30,6 +30,30 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         XCTAssertEqual(app.alerts.count, 0)
     }
 
+    func testPopulatedSummaryPresentsPrimaryHierarchyAndDetails() {
+        launch(fixture: "populated")
+
+        XCTAssertTrue(element(identifier: "dashboard.hero").waitForExistence(timeout: 8))
+        XCTAssertTrue(reveal(identifier: "dashboard.atAGlance").exists)
+        XCTAssertTrue(reveal(identifier: "dashboard.recentProgress").exists)
+        XCTAssertTrue(reveal(identifier: "dashboard.calculation").exists)
+
+        let calculationDisclosure = reveal(identifier: "dashboard.calculation.disclosure")
+        XCTAssertTrue(calculationDisclosure.isHittable)
+        calculationDisclosure.tap()
+        XCTAssertTrue(app.staticTexts["Scheduled workdays"].waitForExistence(timeout: 3))
+    }
+
+    func testSummaryCalendarActionOpensCalendar() {
+        launch(fixture: "fresh")
+
+        let calendarAction = reveal(identifier: "dashboard.calendarAction")
+        XCTAssertTrue(calendarAction.isHittable)
+        calendarAction.tap()
+
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5))
+    }
+
     func testManualOverrideAndNotePersistFromCalendar() {
         launch(fixture: "fresh")
         openCalendarDay()
@@ -198,11 +222,18 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         let calendar = Calendar.autoupdatingCurrent
         var date = calendar.startOfDay(for: .now)
         let month = calendar.component(.month, from: date)
+        let year = calendar.component(.year, from: date)
 
-        while calendar.isDateInWeekend(date), calendar.component(.month, from: date) == month {
+        while calendar.isDateInWeekend(date) {
             guard let previous = calendar.date(byAdding: .day, value: -1, to: date) else {
                 break
             }
+
+            guard calendar.component(.month, from: previous) == month,
+                  calendar.component(.year, from: previous) == year else {
+                break
+            }
+
             date = previous
         }
 

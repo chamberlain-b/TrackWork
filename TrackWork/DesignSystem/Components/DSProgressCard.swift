@@ -6,8 +6,13 @@ struct DSProgressCard: View {
     let detailText: String
     let progress: Double
     var statusText: String?
+    var statusSystemImage: String?
     var statusStyle: DSStatusPillStyle = .success
     var footerCaption: String?
+    var showsProgress = true
+    var progressTint: Color = Color.ds.accentPrimary
+    var progressAccessibilityLabel: String?
+    var progressAccessibilityValue: String?
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -15,15 +20,45 @@ struct DSProgressCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            HStack(alignment: .top) {
-                Text(sectionTitle)
-                    .font(AppTypography.cardTitle)
+            summary
+
+            if showsProgress {
+                ProgressView(value: clampedProgress)
+                    .tint(progressTint)
+                    .background(Color.ds.accentMuted.opacity(0.28), in: Capsule())
+                    .scaleEffect(x: 1, y: 1.8, anchor: .center)
+                    .accessibilityLabel(progressAccessibilityLabel ?? "\(sectionTitle) progress")
+                    .accessibilityValue(progressAccessibilityValue ?? formattedProgress)
+            }
+
+            if let footerCaption {
+                Text(footerCaption)
+                    .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
+            }
+        }
+        .padding(AppSpacing.lg)
+        .background(Color.ds.surfaceBlueTint)
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
+                .stroke(Color.ds.borderSubtle, lineWidth: 1)
+        }
+        .shadow(color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity), radius: AppShadow.cardRadius, x: 0, y: AppShadow.cardY)
+    }
 
-                Spacer(minLength: AppSpacing.sm)
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top) {
+                    sectionHeading
+                    Spacer(minLength: AppSpacing.sm)
+                    statusPill
+                }
 
-                if let statusText {
-                    DSStatusPill(text: statusText, style: statusStyle)
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    sectionHeading
+                    statusPill
                 }
             }
 
@@ -41,30 +76,40 @@ struct DSProgressCard: View {
 
                     Spacer(minLength: AppSpacing.sm)
 
-                    Text(clampedProgress.formatted(.percent.precision(.fractionLength(0))))
-                        .font(AppTypography.captionStrong.monospacedDigit())
-                        .foregroundStyle(Color.ds.accentPrimary)
+                    if showsProgress {
+                        Text(formattedProgress)
+                            .font(AppTypography.captionStrong.monospacedDigit())
+                            .foregroundStyle(progressTint)
+                    }
                 }
             }
-
-            ProgressView(value: clampedProgress)
-                .tint(Color.ds.accentPrimary)
-                .background(Color.ds.accentMuted.opacity(0.28), in: Capsule())
-                .scaleEffect(x: 1, y: 1.8, anchor: .center)
-
-            if let footerCaption {
-                Text(footerCaption)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textTertiary)
-            }
         }
-        .padding(AppSpacing.lg)
-        .background(Color.ds.surfaceBlueTint)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
-                .stroke(Color.ds.borderSubtle, lineWidth: 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(sectionTitle)
+        .accessibilityValue(summaryAccessibilityValue)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var sectionHeading: some View {
+        Text(sectionTitle)
+            .font(AppTypography.cardTitle)
+            .foregroundStyle(Color.ds.textSecondary)
+    }
+
+    @ViewBuilder
+    private var statusPill: some View {
+        if let statusText {
+            DSStatusPill(text: statusText, systemImage: statusSystemImage, style: statusStyle)
         }
-        .shadow(color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity), radius: AppShadow.cardRadius, x: 0, y: AppShadow.cardY)
+    }
+
+    private var formattedProgress: String {
+        clampedProgress.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var summaryAccessibilityValue: String {
+        [metricText, detailText, statusText]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 }

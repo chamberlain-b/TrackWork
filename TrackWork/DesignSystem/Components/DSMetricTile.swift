@@ -34,7 +34,7 @@ struct DSMetricTile: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textTertiary)
+                        .foregroundStyle(Color.ds.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

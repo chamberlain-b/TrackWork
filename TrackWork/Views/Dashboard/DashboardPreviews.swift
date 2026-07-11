@@ -2,12 +2,18 @@ import SwiftData
 import SwiftUI
 
 #Preview("Populated") {
-    DashboardView()
+    DashboardView(referenceDate: PreviewData.dashboardReferenceDate)
         .modelContainer(PreviewData.modelContainer())
 }
 
-#Preview("Large text") {
-    DashboardView()
+#Preview("Dark") {
+    DashboardView(referenceDate: PreviewData.dashboardReferenceDate)
         .modelContainer(PreviewData.modelContainer())
-        .environment(\.dynamicTypeSize, .accessibility2)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Largest text") {
+    DashboardView(referenceDate: PreviewData.dashboardReferenceDate)
+        .modelContainer(PreviewData.modelContainer())
+        .environment(\.dynamicTypeSize, .accessibility5)
 }

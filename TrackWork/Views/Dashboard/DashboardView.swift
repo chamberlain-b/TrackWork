@@ -12,22 +12,25 @@ struct DashboardView: View {
 
     private let onOpenCalendar: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
+    private let referenceDate: Date
     private let calendar = Calendar.dashboardCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
     private let trendCalculator = ComplianceTrendCalculator()
 
     init(
         onOpenCalendar: (() -> Void)? = nil,
-        onOpenSettings: (() -> Void)? = nil
+        onOpenSettings: (() -> Void)? = nil,
+        referenceDate: Date = .now
     ) {
         self.onOpenCalendar = onOpenCalendar
         self.onOpenSettings = onOpenSettings
+        self.referenceDate = referenceDate
     }
 }
 
 private extension DashboardView {
     private var currentMonthStart: Date {
-        calendar.dashboardMonthStart(for: .now)
+        calendar.dashboardMonthStart(for: referenceDate)
     }
 
     private var currentMonthEnd: Date {
@@ -35,7 +38,7 @@ private extension DashboardView {
     }
 
     private var today: Date {
-        calendar.startOfDay(for: .now)
+        calendar.startOfDay(for: referenceDate)
     }
 
     private var activeRule: ComplianceRule {
@@ -323,28 +326,44 @@ extension DashboardView {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppSpacing.lg) {
+                LazyVStack(alignment: .leading, spacing: AppSpacing.xl) {
                     if complianceRules.isEmpty {
                         DashboardSetupCard(onOpenSettings: onOpenSettings)
                     } else {
-                        ComplianceHeroCard(
-                            monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
-                            completedOfficeDays: summary.completedOfficeDays,
-                            requiredOfficeDays: summary.requiredOfficeDays,
-                            remainingOfficeDays: remainingOfficeDays,
-                            availableOfficeDays: possibleRemainingOfficeDates,
-                            progress: targetProgress,
-                            status: dashboardStatus,
-                            targetIsConfigured: hasConfiguredTarget
+                        VStack(alignment: .leading, spacing: AppSpacing.cardGap) {
+                            ComplianceHeroCard(
+                                monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
+                                completedOfficeDays: summary.completedOfficeDays,
+                                requiredOfficeDays: summary.requiredOfficeDays,
+                                remainingOfficeDays: remainingOfficeDays,
+                                availableOfficeDays: possibleRemainingOfficeDates,
+                                progress: targetProgress,
+                                status: dashboardStatus,
+                                targetIsConfigured: hasConfiguredTarget
+                            )
+
+                            if !reviewDates.isEmpty {
+                                DashboardReviewAction(
+                                    reviewCount: reviewDates.count,
+                                    onOpenCalendar: onOpenCalendar
+                                )
+                            } else if !hasPeriodData {
+                                DashboardStartAction(onOpenCalendar: onOpenCalendar)
+                            }
+                        }
+
+                        MonthAtAGlanceSection(
+                            eligibleDaysToDate: eligibleDatesThroughToday.count,
+                            confirmedDays: confirmedDatesThroughToday.count,
+                            officeDays: completedOfficeDates.intersection(eligibleDatesThroughToday).count,
+                            reviewDays: reviewDates.count
                         )
 
-                        if !reviewDates.isEmpty {
-                            DashboardReviewCard(
-                                reviewCount: reviewDates.count,
-                                onOpenCalendar: onOpenCalendar
+                        if hasConfiguredTarget {
+                            RecentTrendCard(
+                                points: recentTrend,
+                                selectedGranularity: $selectedTrendGranularity
                             )
-                        } else if !hasPeriodData {
-                            DashboardStartCard(onOpenCalendar: onOpenCalendar)
                         }
 
                         MonthCalculationCard(
@@ -358,22 +377,6 @@ extension DashboardView {
                             jurisdictionName: jurisdictionName,
                             explanation: requirementExplanation
                         )
-
-                        if hasPeriodData {
-                            RecordedCoverageCard(
-                                eligibleDaysToDate: eligibleDatesThroughToday.count,
-                                confirmedDays: confirmedDatesThroughToday.count,
-                                officeDays: completedOfficeDates.intersection(eligibleDatesThroughToday).count,
-                                reviewDays: reviewDates.count
-                            )
-                        }
-
-                        if hasConfiguredTarget {
-                            RecentTrendCard(
-                                points: recentTrend,
-                                selectedGranularity: $selectedTrendGranularity
-                            )
-                        }
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)

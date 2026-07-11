@@ -89,75 +89,44 @@ struct ComplianceHeroCard: View {
     let targetIsConfigured: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.lg) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.md) {
-                    monthAndMetric
-                    Spacer(minLength: AppSpacing.sm)
-                    statusPill
-                }
-
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    monthAndMetric
-                    statusPill
-                }
-            }
-
-            if targetIsConfigured && requiredOfficeDays > 0 {
-                ProgressView(value: progress)
-                    .tint(status.color)
-                    .accessibilityLabel("Office-day target progress")
-                    .accessibilityValue("\(completedOfficeDays) of \(requiredOfficeDays) days")
-
-                Text(progressDetail)
-                    .font(AppTypography.callout)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Set a requirement in Settings to calculate your monthly target.")
-                    .font(AppTypography.callout)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(AppSpacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface()
-    }
-
-    private var monthAndMetric: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text(monthTitle)
-                .font(AppTypography.captionStrong)
-                .foregroundStyle(Color.ds.textSecondary)
-
-            Text(targetIsConfigured ? "\(completedOfficeDays) of \(requiredOfficeDays)" : "No target")
-                .font(AppTypography.heroMetric.monospacedDigit())
-                .foregroundStyle(Color.ds.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(targetIsConfigured ? "office days completed" : "setup required")
-                .font(AppTypography.callout)
-                .foregroundStyle(Color.ds.textSecondary)
-        }
-    }
-
-    private var statusPill: some View {
-        DSStatusPill(
-            text: status.title,
-            systemImage: status.systemImage,
-            style: status.pillStyle
+        DSProgressCard(
+            sectionTitle: monthTitle,
+            metricText: targetIsConfigured ? "\(completedOfficeDays) of \(requiredOfficeDays)" : "No target",
+            detailText: targetIsConfigured ? "office days completed" : "Setup required",
+            progress: progress,
+            statusText: status.title,
+            statusSystemImage: status.systemImage,
+            statusStyle: status.pillStyle,
+            footerCaption: footerCaption,
+            showsProgress: targetIsConfigured && requiredOfficeDays > 0,
+            progressTint: status.color,
+            progressAccessibilityLabel: "Office-day target progress",
+            progressAccessibilityValue: targetIsConfigured
+                ? "\(completedOfficeDays) of \(requiredOfficeDays) office days"
+                : nil
         )
+        .accessibilityIdentifier("dashboard.hero")
     }
 
     private var progressDetail: String {
         let workdayLabel = availableOfficeDays == 1 ? "eligible workday" : "eligible workdays"
 
-        if remainingOfficeDays == 0 {
+        switch status {
+        case .noEligibleDays:
+            return "No eligible workdays this month after holidays, leave, and exclusions."
+        case .complete:
             return "Monthly target met · \(availableOfficeDays) \(workdayLabel) still available"
+        default:
+            return "\(remainingOfficeDays) more needed · \(availableOfficeDays) \(workdayLabel) available"
+        }
+    }
+
+    private var footerCaption: String {
+        if targetIsConfigured {
+            return progressDetail
         }
 
-        return "\(remainingOfficeDays) more needed · \(availableOfficeDays) \(workdayLabel) available"
+        return "Set a requirement in Settings to calculate your monthly target."
     }
 }
 
@@ -199,85 +168,46 @@ struct DashboardSetupCard: View {
     }
 }
 
-struct DashboardStartCard: View {
+struct DashboardStartAction: View {
     let onOpenCalendar: (() -> Void)?
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Label("No attendance recorded this month", systemImage: "calendar.badge.plus")
-                    .font(AppTypography.headline)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                Text("Confirm your first office or home day in Calendar. You can add leave there too.")
-                    .font(AppTypography.body)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                calendarControl(title: "Open Calendar")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func calendarControl(title: String) -> some View {
-        if let onOpenCalendar {
-            Button(title, systemImage: "calendar", action: onOpenCalendar)
-                .buttonStyle(.borderedProminent)
-        } else {
-            NavigationLink {
-                MonthCalendarView()
-            } label: {
-                Label(title, systemImage: "calendar")
-            }
-            .buttonStyle(.borderedProminent)
-        }
+        DashboardCalendarAction(
+            title: "No attendance recorded this month",
+            message: "Confirm your first office or home day. You can add leave there too.",
+            actionTitle: "Open Calendar",
+            systemImage: "calendar.badge.plus",
+            tint: Color.ds.accentPrimary,
+            showsMessage: true,
+            accessibilityLabel: "Open Calendar to record attendance",
+            accessibilityIdentifier: "dashboard.calendarAction",
+            onOpenCalendar: onOpenCalendar
+        )
     }
 }
 
-struct DashboardReviewCard: View {
+struct DashboardReviewAction: View {
     let reviewCount: Int
     let onOpenCalendar: (() -> Void)?
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Label(
-                    "\(reviewCount) day\(reviewCount == 1 ? "" : "s") need confirmation",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                    .font(AppTypography.headline)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                Text("Confirm missing or unknown attendance so this month’s status is reliable.")
-                    .font(AppTypography.body)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                calendarControl
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var calendarControl: some View {
-        if let onOpenCalendar {
-            Button("Review in Calendar", systemImage: "calendar.badge.exclamationmark", action: onOpenCalendar)
-                .buttonStyle(.borderedProminent)
-                .tint(Color.ds.warning)
-        } else {
-            NavigationLink {
-                MonthCalendarView()
-            } label: {
-                Label("Review in Calendar", systemImage: "calendar.badge.exclamationmark")
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.ds.warning)
-        }
+        DashboardCalendarAction(
+            title: "\(reviewCount) day\(reviewCount == 1 ? "" : "s") need confirmation",
+            message: "Confirm missing attendance so this month’s status is reliable.",
+            actionTitle: "Review",
+            systemImage: "exclamationmark.triangle.fill",
+            tint: Color.ds.warning,
+            showsMessage: false,
+            accessibilityLabel: "Review \(reviewCount) day\(reviewCount == 1 ? "" : "s") in Calendar",
+            accessibilityIdentifier: "dashboard.calendarAction",
+            onOpenCalendar: onOpenCalendar
+        )
     }
 }
 
 struct MonthCalculationCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let scheduledWorkdays: Int
     let publicHolidays: Int
     let annualLeave: Int
@@ -289,41 +219,60 @@ struct MonthCalculationCard: View {
     let explanation: String
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("How this month is calculated")
-                    .font(AppTypography.cardTitle)
+        VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            Text("Calculation details")
+                .font(AppTypography.sectionTitle)
+                .foregroundStyle(Color.ds.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("dashboard.calculation")
+
+            DSCard(includesShadow: false) {
+                DisclosureGroup {
+                    calculationBreakdown
+                        .padding(.top, AppSpacing.sm)
+                } label: {
+                    Text("\(eligibleWorkdays) eligible workdays → \(requiredOfficeDays) required")
+                        .font(AppTypography.headline.monospacedDigit())
+                        .foregroundStyle(Color.ds.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(
+                            "\(eligibleWorkdays) eligible workdays, \(requiredOfficeDays) office days required"
+                        )
+                }
+                .tint(Color.ds.accentPrimary)
+                .accessibilityIdentifier("dashboard.calculation.disclosure")
+            }
+        }
+    }
+
+    private var calculationBreakdown: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Divider()
+
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                metricRow("Scheduled workdays", value: scheduledWorkdays.formatted())
+                metricRow("Public holidays", value: deduction(publicHolidays))
+                metricRow("Annual leave", value: deduction(annualLeave))
+                metricRow("Sick leave", value: deduction(sickLeave))
+                metricRow("Custom exclusions", value: deduction(customExcluded))
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                Text("Target rule")
+                    .font(AppTypography.captionStrong)
                     .foregroundStyle(Color.ds.textPrimary)
 
-                metricRow("Eligible workdays", value: eligibleWorkdays.formatted(), emphasized: true)
-                metricRow("Office-day target", value: requiredOfficeDays.formatted(), emphasized: true)
-
-                DisclosureGroup("Workday adjustments") {
-                    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                        metricRow("Scheduled workdays", value: scheduledWorkdays.formatted())
-                        metricRow("Public holidays", value: deduction(publicHolidays))
-                        metricRow("Annual leave", value: deduction(annualLeave))
-                        metricRow("Sick leave", value: deduction(sickLeave))
-                        metricRow("Custom exclusions", value: deduction(customExcluded))
-                    }
-                    .padding(.top, AppSpacing.sm)
-                }
-                .font(AppTypography.callout.weight(.semibold))
-                .foregroundStyle(Color.ds.accentPrimary)
-
-                DisclosureGroup("How your target is calculated") {
-                    Text(explanation)
-                        .font(AppTypography.callout)
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .padding(.top, AppSpacing.xs)
-                }
-                .font(AppTypography.callout.weight(.semibold))
-                .foregroundStyle(Color.ds.accentPrimary)
-
-                Label(jurisdictionName, systemImage: "mappin.and.ellipse")
-                    .font(AppTypography.caption)
+                Text(explanation)
+                    .font(AppTypography.callout)
                     .foregroundStyle(Color.ds.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Label(jurisdictionName, systemImage: "mappin.and.ellipse")
+                .font(AppTypography.caption)
+                .foregroundStyle(Color.ds.textSecondary)
         }
     }
 
@@ -331,15 +280,129 @@ struct MonthCalculationCard: View {
         value == 0 ? "0" : "−\(value.formatted())"
     }
 
-    private func metricRow(_ title: String, value: String, emphasized: Bool = false) -> some View {
-        LabeledContent {
-            Text(value)
-                .font((emphasized ? AppTypography.headline : AppTypography.callout).monospacedDigit())
-                .foregroundStyle(emphasized ? Color.ds.textPrimary : Color.ds.textSecondary)
-        } label: {
-            Text(title)
-                .font(emphasized ? AppTypography.headline : AppTypography.callout)
-                .foregroundStyle(emphasized ? Color.ds.textPrimary : Color.ds.textSecondary)
+    @ViewBuilder
+    private func metricRow(_ title: String, value: String) -> some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                    Text(title)
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+
+                    Text(value)
+                        .font(AppTypography.headline.monospacedDigit())
+                        .foregroundStyle(Color.ds.textPrimary)
+                }
+            } else {
+                LabeledContent {
+                    Text(value)
+                        .font(AppTypography.callout.monospacedDigit())
+                        .foregroundStyle(Color.ds.textSecondary)
+                } label: {
+                    Text(title)
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+            }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
+    }
+}
+
+private struct DashboardCalendarAction: View {
+    let title: String
+    let message: String
+    let actionTitle: String
+    let systemImage: String
+    let tint: Color
+    let showsMessage: Bool
+    let accessibilityLabel: String
+    let accessibilityIdentifier: String
+    let onOpenCalendar: (() -> Void)?
+
+    var body: some View {
+        control
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        if let onOpenCalendar {
+            Button(action: onOpenCalendar) {
+                label
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(message)
+            .accessibilityHint("Opens Calendar")
+            .accessibilityIdentifier(accessibilityIdentifier)
+        } else {
+            NavigationLink {
+                MonthCalendarView()
+            } label: {
+                label
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(message)
+            .accessibilityHint("Opens Calendar")
+            .accessibilityIdentifier(accessibilityIdentifier)
+        }
+    }
+
+    private var label: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: AppSpacing.sm) {
+                leadingContent
+                Spacer(minLength: AppSpacing.xs)
+                actionLabel
+            }
+
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                leadingContent
+                actionLabel
+                    .padding(.leading, 42)
+            }
+        }
+        .padding(AppSpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .glassSurface(cornerRadius: AppRadius.lg, tint: tint, isInteractive: true)
+    }
+
+    private var leadingContent: some View {
+        HStack(alignment: .top, spacing: AppSpacing.sm) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.1), in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(title)
+                    .font(AppTypography.headline)
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if showsMessage {
+                    Text(message)
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var actionLabel: some View {
+        HStack(spacing: AppSpacing.xxs) {
+            Text(actionTitle)
+            Image(systemName: "chevron.right")
+                .accessibilityHidden(true)
+        }
+        .font(AppTypography.captionStrong)
+        .foregroundStyle(Color.ds.textPrimary)
     }
 }

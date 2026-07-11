@@ -53,11 +53,11 @@
 		5F8A72E92FF748DF00DC4D9E /* LocationEventTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationEventTests.swift; sourceTree = "<group>"; };
 		5F8A72ED2FF74B9A00DC4D9E /* AttendanceInferenceServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttendanceInferenceServiceTests.swift; sourceTree = "<group>"; };
 		5F8A730B2FF7600000DC4D9E /* TrackWorkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5F8A73152FF7600000DC4D9E /* DataManagementServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataManagementServiceTests.swift; sourceTree = "<group>"; };
 		5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompliancePeriodTests.swift; sourceTree = "<group>"; };
 		5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplianceTrendCalculatorTests.swift; sourceTree = "<group>"; };
 		5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExcludedDayTests.swift; sourceTree = "<group>"; };
+		5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -439,9 +439,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M7A22582L2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
+				INFOPLIST_KEY_CFBundleDisplayName = "Track Work";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -478,9 +479,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M7A22582L2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
+				INFOPLIST_KEY_CFBundleDisplayName = "Track Work";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location to identify when you are at home or in the office for your private attendance records.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

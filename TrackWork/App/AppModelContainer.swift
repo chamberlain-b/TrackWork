@@ -116,11 +116,18 @@ enum AppModelContainer {
         let calendar = Calendar.autoupdatingCurrent
         var date = calendar.startOfDay(for: .now)
         let month = calendar.component(.month, from: date)
+        let year = calendar.component(.year, from: date)
 
-        while calendar.isDateInWeekend(date), calendar.component(.month, from: date) == month {
+        while calendar.isDateInWeekend(date) {
             guard let previous = calendar.date(byAdding: .day, value: -1, to: date) else {
                 break
             }
+
+            guard calendar.component(.month, from: previous) == month,
+                  calendar.component(.year, from: previous) == year else {
+                break
+            }
+
             date = previous
         }
 
