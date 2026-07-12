@@ -15,6 +15,7 @@ final class Place {
     var typeRaw: String
     var latitude: Double
     var longitude: Double
+    var formattedAddress: String?
     var radiusMeters: Double
     var isActive: Bool
     var createdAt: Date
@@ -26,6 +27,7 @@ final class Place {
         type: PlaceType,
         latitude: Double,
         longitude: Double,
+        formattedAddress: String? = nil,
         radiusMeters: Double = 150,
         isActive: Bool = true,
         createdAt: Date = .now,
@@ -36,6 +38,7 @@ final class Place {
         self.typeRaw = type.rawValue
         self.latitude = latitude
         self.longitude = longitude
+        self.formattedAddress = formattedAddress
         self.radiusMeters = radiusMeters
         self.isActive = isActive
         self.createdAt = createdAt
@@ -75,5 +78,10 @@ extension PlaceType {
 extension Place {
     var type: PlaceType? {
         PlaceType(rawValue: typeRaw)
+    }
+
+    var displayAddress: String {
+        let address = formattedAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return address.isEmpty ? "Map-selected location" : address
     }
 }

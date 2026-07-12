@@ -5,52 +5,60 @@ import Observation
 @Observable
 final class LocationAuthorizationService: NSObject {
     private let locationManager: CLLocationManager
+    private var shouldRequestLocationAfterAuthorization = false
 
     private(set) var authorizationStatus: CLAuthorizationStatus
-    private(set) var isRequestingAuthorization = false
+    private(set) var isRequestingLocation = false
+    private(set) var currentLocation: CLLocation?
+    private(set) var locationUpdateID = 0
+    private(set) var errorMessage: String?
 
-    let automaticBackgroundTrackingEnabled: Bool
-
-    init(locationManager: CLLocationManager = CLLocationManager(), automaticBackgroundTrackingEnabled: Bool = false) {
+    init(locationManager: CLLocationManager = CLLocationManager()) {
         self.locationManager = locationManager
         self.authorizationStatus = locationManager.authorizationStatus
-        self.automaticBackgroundTrackingEnabled = automaticBackgroundTrackingEnabled
         super.init()
         self.locationManager.delegate = self
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     }
 
-    var canRequestWhenInUseAuthorization: Bool {
-        authorizationStatus == .notDetermined
-    }
-
-    var canRequestAlwaysAuthorization: Bool {
-        automaticBackgroundTrackingEnabled && authorizationStatus == .authorizedWhenInUse
+    var isPermissionDenied: Bool {
+        authorizationStatus == .denied || authorizationStatus == .restricted
     }
 
     func refreshAuthorizationStatus() {
         authorizationStatus = locationManager.authorizationStatus
     }
 
-    func requestWhenInUseAuthorization() {
+    func requestCurrentLocation() {
         refreshAuthorizationStatus()
+        errorMessage = nil
+        currentLocation = nil
+        isRequestingLocation = true
 
-        guard canRequestWhenInUseAuthorization else {
-            return
+        switch authorizationStatus {
+        case .notDetermined:
+            shouldRequestLocationAfterAuthorization = true
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            requestOneLocationFix()
+        case .denied:
+            finishWithError("Location access is off. You can enable it in iOS Settings or choose an address instead.")
+        case .restricted:
+            finishWithError("Location access is restricted on this device. Choose an address or a point on the map instead.")
+        @unknown default:
+            finishWithError("Current location is unavailable. Choose an address or a point on the map instead.")
         }
-
-        isRequestingAuthorization = true
-        locationManager.requestWhenInUseAuthorization()
     }
 
-    func requestAlwaysAuthorizationIfAvailable() {
-        refreshAuthorizationStatus()
+    private func requestOneLocationFix() {
+        shouldRequestLocationAfterAuthorization = false
+        locationManager.requestLocation()
+    }
 
-        guard canRequestAlwaysAuthorization else {
-            return
-        }
-
-        isRequestingAuthorization = true
-        locationManager.requestAlwaysAuthorization()
+    private func finishWithError(_ message: String) {
+        shouldRequestLocationAfterAuthorization = false
+        isRequestingLocation = false
+        errorMessage = message
     }
 }
 
@@ -58,7 +66,52 @@ extension LocationAuthorizationService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             authorizationStatus = manager.authorizationStatus
-            isRequestingAuthorization = false
+
+            guard shouldRequestLocationAfterAuthorization else {
+                return
+            }
+
+            switch authorizationStatus {
+            case .authorizedWhenInUse, .authorizedAlways:
+                requestOneLocationFix()
+            case .denied:
+                finishWithError(
+                    "Location access was not allowed. Choose an address instead, or enable access in iOS Settings."
+                )
+            case .restricted:
+                finishWithError("Location access is restricted on this device. Choose an address instead.")
+            case .notDetermined:
+                break
+            @unknown default:
+                finishWithError("Current location is unavailable. Choose an address instead.")
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else {
+            return
+        }
+
+        Task { @MainActor in
+            guard isRequestingLocation else {
+                return
+            }
+
+            currentLocation = location
+            locationUpdateID += 1
+            isRequestingLocation = false
+            errorMessage = nil
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            guard isRequestingLocation else {
+                return
+            }
+
+            finishWithError("Your current location could not be determined. Try again or search for an address.")
         }
     }
 }

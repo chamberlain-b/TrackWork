@@ -1,74 +1,139 @@
 import MapKit
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct PlaceEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
     @Query(sort: \Place.typeRaw) private var places: [Place]
 
     let placeType: PlaceType
     let place: Place?
 
     @State private var name: String
-    @State private var latitudeText: String
-    @State private var longitudeText: String
+    @State private var selection: PlaceSelection?
     @State private var radiusMeters: Double
+    @State private var isShowingAddressSearch = false
     @State private var isShowingMapPicker = false
+    @State private var isShowingCurrentLocationExplanation = false
+    @State private var isResolvingCurrentLocation = false
+    @State private var selectionNotice: String?
     @State private var saveError: String?
+    @State private var locationService = LocationAuthorizationService()
 
+    private let lookupService = PlaceLookupService()
     private let radiusOptions = [50.0, 100.0, 150.0, 200.0, 300.0, 500.0]
 
+    @MainActor
     init(placeType: PlaceType, place: Place?) {
         self.placeType = placeType
         self.place = place
         _name = State(initialValue: place?.name ?? placeType.defaultName)
-        _latitudeText = State(initialValue: place.map { Self.formattedCoordinate($0.latitude) } ?? "")
-        _longitudeText = State(initialValue: place.map { Self.formattedCoordinate($0.longitude) } ?? "")
+        _selection = State(initialValue: place.map(PlaceSelection.init(place:)))
         _radiusMeters = State(initialValue: place?.radiusMeters ?? 150)
     }
 
     var body: some View {
         Form {
-            Section {
+            Section("Details") {
                 TextField("Name", text: $name)
                     .textInputAutocapitalization(.words)
+                    .accessibilityIdentifier("placeEditor.name")
+            }
 
-                TextField("Latitude", text: $latitudeText)
-                    .keyboardType(.numbersAndPunctuation)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("placeEditor.latitude")
+            Section {
+                if let selection {
+                    selectedPlaceRow(selection)
+                } else {
+                    Label {
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            Text("No place selected")
+                                .foregroundStyle(Color.ds.textPrimary)
+                            Text("Search for an address or use your current location.")
+                                .font(AppTypography.caption)
+                                .foregroundStyle(Color.ds.textSecondary)
+                        }
+                    } icon: {
+                        Image(systemName: "mappin.slash")
+                            .foregroundStyle(Color.ds.textTertiary)
+                    }
+                }
 
-                TextField("Longitude", text: $longitudeText)
-                    .keyboardType(.numbersAndPunctuation)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("placeEditor.longitude")
+                Button {
+                    isShowingAddressSearch = true
+                } label: {
+                    Label("Search Address or Place", systemImage: "magnifyingglass")
+                }
+                .accessibilityIdentifier("placeEditor.searchAddress")
+
+                Button {
+                    isShowingCurrentLocationExplanation = true
+                } label: {
+                    if locationService.isRequestingLocation || isResolvingCurrentLocation {
+                        HStack(spacing: AppSpacing.sm) {
+                            ProgressView()
+                            Text("Finding Current Location…")
+                        }
+                    } else {
+                        Label("Use Current Location", systemImage: "location.fill")
+                    }
+                }
+                .disabled(locationService.isRequestingLocation || isResolvingCurrentLocation)
+                .accessibilityIdentifier("placeEditor.useCurrentLocation")
 
                 Button {
                     isShowingMapPicker = true
                 } label: {
-                    Label("Choose on Map", systemImage: "map")
+                    Label(selection == nil ? "Choose on Map" : "Adjust on Map", systemImage: "map")
                 }
                 .accessibilityIdentifier("placeEditor.chooseOnMap")
             } header: {
-                Text("Coordinates")
+                Text("Location")
             } footer: {
-                Text("Enter decimal coordinates manually or choose them on the map. Saved active places are used for geofence monitoring when permission allows.")
+                Text(
+                    "Address search is provided by Apple Maps. Current Location requests one location fix only "
+                        + "after you choose it; Work Track does not start background or continuous tracking."
+                )
             }
 
             Section {
-                Picker("Radius", selection: $radiusMeters) {
+                Picker("Area around place", selection: $radiusMeters) {
                     ForEach(radiusOptions, id: \.self) { radius in
                         Text("\(radius.formatted(.number.precision(.fractionLength(0)))) m")
                             .tag(radius)
                     }
                 }
             } header: {
-                Text("Detection Radius")
+                Text("Place Area")
             } footer: {
-                Text("150 metres is the default. iOS may adjust very small or unsupported geofence radii.")
+                Text("Choose how close you need to be for this place. 150 metres works well for most homes and offices.")
+            }
+
+            if let selectionNotice {
+                Section {
+                    Label(selectionNotice, systemImage: "location.circle")
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+            }
+
+            if let locationError = locationService.errorMessage {
+                Section {
+                    Label(locationError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(Color.ds.critical)
+                        .accessibilityIdentifier("placeEditor.locationError")
+
+                    if locationService.isPermissionDenied {
+                        Button("Open iOS Settings") {
+                            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
+                                return
+                            }
+                            openURL(settingsURL)
+                        }
+                    }
+                }
             }
 
             if let saveError {
@@ -80,24 +145,76 @@ struct PlaceEditorView: View {
         }
         .navigationTitle(placeType.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.interactively)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     savePlace()
                 }
+                .disabled(!canSave)
+                .accessibilityIdentifier("placeEditor.save")
+            }
+        }
+        .sheet(isPresented: $isShowingAddressSearch) {
+            AddressSearchView { selection in
+                applySelection(selection)
             }
         }
         .sheet(isPresented: $isShowingMapPicker) {
             NavigationStack {
                 MapPickerView(
                     placeType: placeType,
-                    initialCoordinate: selectedCoordinate,
+                    initialSelection: selection,
                     radiusMeters: radiusMeters
-                ) { coordinate in
-                    applySelectedCoordinate(coordinate)
+                ) { selection in
+                    applySelection(selection)
                 }
             }
         }
+        .alert("Use your current location?", isPresented: $isShowingCurrentLocationExplanation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Use Current Location") {
+                selectionNotice = nil
+                locationService.requestCurrentLocation()
+            }
+        } message: {
+            Text(
+                "Work Track will ask iOS for one location fix to place this pin. It will not request Always access "
+                    + "or start background or continuous tracking."
+            )
+        }
+        .onChange(of: locationService.locationUpdateID) {
+            guard let location = locationService.currentLocation else {
+                return
+            }
+
+            Task { await applyCurrentLocation(location) }
+        }
+    }
+
+    private func selectedPlaceRow(_ selection: PlaceSelection) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text("Selected place")
+                    .font(AppTypography.captionStrong)
+                    .foregroundStyle(Color.ds.textSecondary)
+
+                Text(selection.formattedAddress)
+                    .font(AppTypography.body)
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } icon: {
+            Image(systemName: "mappin.circle.fill")
+                .font(.title2)
+                .foregroundStyle(Color.ds.accentPrimary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("placeEditor.selectedPlace")
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selection != nil
     }
 
     private func savePlace() {
@@ -109,13 +226,8 @@ struct PlaceEditorView: View {
             return
         }
 
-        guard let latitude = coordinate(from: latitudeText), (-90...90).contains(latitude) else {
-            saveError = "Enter a latitude from -90 to 90."
-            return
-        }
-
-        guard let longitude = coordinate(from: longitudeText), (-180...180).contains(longitude) else {
-            saveError = "Enter a longitude from -180 to 180."
+        guard let selection else {
+            saveError = "Search for an address, use your current location, or choose a point on the map."
             return
         }
 
@@ -124,20 +236,23 @@ struct PlaceEditorView: View {
         if let editablePlace {
             editablePlace.name = trimmedName
             editablePlace.typeRaw = placeType.rawValue
-            editablePlace.latitude = latitude
-            editablePlace.longitude = longitude
+            editablePlace.latitude = selection.latitude
+            editablePlace.longitude = selection.longitude
+            editablePlace.formattedAddress = selection.formattedAddress
             editablePlace.radiusMeters = radiusMeters
             editablePlace.isActive = true
             editablePlace.updatedAt = .now
         } else {
-            let newPlace = Place(
-                name: trimmedName,
-                type: placeType,
-                latitude: latitude,
-                longitude: longitude,
-                radiusMeters: radiusMeters
+            modelContext.insert(
+                Place(
+                    name: trimmedName,
+                    type: placeType,
+                    latitude: selection.latitude,
+                    longitude: selection.longitude,
+                    formattedAddress: selection.formattedAddress,
+                    radiusMeters: radiusMeters
+                )
             )
-            modelContext.insert(newPlace)
         }
 
         do {
@@ -148,41 +263,23 @@ struct PlaceEditorView: View {
         }
     }
 
-    private var selectedCoordinate: CLLocationCoordinate2D? {
-        guard
-            let latitude = coordinate(from: latitudeText),
-            let longitude = coordinate(from: longitudeText),
-            (-90...90).contains(latitude),
-            (-180...180).contains(longitude)
-        else {
-            return nil
-        }
-
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
-
-    private func applySelectedCoordinate(_ coordinate: CLLocationCoordinate2D) {
-        latitudeText = Self.formattedCoordinate(coordinate.latitude)
-        longitudeText = Self.formattedCoordinate(coordinate.longitude)
+    private func applySelection(_ selection: PlaceSelection) {
+        self.selection = selection
+        selectionNotice = nil
         saveError = nil
     }
 
-    private func coordinate(from text: String) -> Double? {
-        Double(text.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
+    private func applyCurrentLocation(_ location: CLLocation) async {
+        isResolvingCurrentLocation = true
+        let selection = await lookupService.selection(for: location, fallback: "Current location")
+        applySelection(selection)
 
-    private static func formattedCoordinate(_ coordinate: Double) -> String {
-        coordinateFormatter.string(from: NSNumber(value: coordinate)) ?? ""
-    }
+        if location.horizontalAccuracy > 200 {
+            selectionNotice = "This is an approximate location. Use Adjust on Map if the pin needs fine-tuning."
+        }
 
-    private static let coordinateFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 6
-        formatter.usesGroupingSeparator = false
-        return formatter
-    }()
+        isResolvingCurrentLocation = false
+    }
 }
 
 #Preview("Home") {

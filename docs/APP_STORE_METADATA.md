@@ -1,6 +1,6 @@
 # Work Track 1.0 App Store Metadata Draft
 
-This draft matches the current local-only iOS MVP. Recheck it against the final archive before submission.
+This draft matches the current local-first iOS MVP. Recheck it against the final archive before submission.
 
 ## App Information
 
@@ -32,7 +32,7 @@ Generate a styled PDF or spreadsheet-compatible CSV report for any supported per
 
 Your app data stays in Work Track's on-device storage. There is no account, advertising, analytics SDK, or app-managed cloud sync. Reports leave the app only when you choose to share them. Settings includes clear privacy information and a confirmed option to delete all on-device user data.
 
-Automatic background location detection is intentionally unavailable in this MVP. Home and office places can be saved for future use, while manual attendance remains the supported workflow.
+Save home and office places by searching for an address, using your current location, or adjusting the pin on a map. Selected addresses and coordinates stay in on-device storage. Current location is requested only when you choose it; automatic background detection remains unavailable and manual attendance remains the supported workflow.
 
 ## Keywords
 
@@ -43,17 +43,18 @@ Automatic background location detection is intentionally unavailable in this MVP
 - Manual office, home, leave, note, override, and custom-exclusion records.
 - Seven deterministic compliance periods and monthly, quarterly, and yearly trends.
 - Verified 2026 AU and NZ public holidays.
+- Address-first home and office place setup with optional one-shot current location.
 - Private PDF and CSV reports.
 - On-device privacy disclosure and confirmed data reset.
 
 ## App Privacy Draft
 
 - Tracking: No.
-- Data collected: No. The app has no network client, analytics, advertising, account, or third-party SDK. Apple defines data processed only on the device and never transmitted to the developer as not collected.
-- Precise location: Not collected by the developer. Saved place coordinates remain on-device; automatic detection is disabled in 1.0.
+- Data collected: No. The app has no developer-operated network service, analytics, advertising, account, or third-party SDK. User-initiated place lookup uses Apple Maps, and no lookup or location data is sent to the Work Track developer.
+- Precise location: Not collected by the developer. Selected addresses and coordinates remain on-device. Current location is used only for an explicit one-shot place selection; Always access and automatic background detection are disabled in 1.0.
 - User content: Not collected by the developer. Notes remain on-device unless the user deliberately shares a report.
 
-Re-answer the App Privacy questionnaire if networking, analytics, cloud sync, crash reporting under developer control, or third-party SDKs are added.
+Re-answer the App Privacy questionnaire if developer-operated networking, analytics, cloud sync, crash reporting under developer control, third-party SDKs, or new location uses are added.
 
 ## Owner-Only Submission Inputs
 

@@ -239,16 +239,18 @@ ceil(adjustedEligibleDays * requiredPercentage)
 ### Steps
 
 1. Open Location Setup.
-2. Add or edit a home place.
-3. Add or edit an office place.
-4. Confirm each place has a clear name and selected area or coordinate-derived location.
-5. Save and revisit Location Setup.
+2. Add or edit a home place by searching for and selecting an address.
+3. Add or edit an office place using a different address.
+4. Adjust one selected place on the map and choose its place area.
+5. Save both places and revisit Location Setup.
 
 ### Expected Results
 
 - Home and office can be configured separately.
+- The normal setup UI shows a readable address and does not ask the user to understand latitude or longitude.
 - Saved places persist after leaving and returning to Location Setup.
-- The UI explains location-based attendance before requesting sensitive permissions.
+- Opening setup and searching for an address do not request location permission.
+- Address search failures leave current-location and map-selection alternatives available.
 - No continuous GPS tracking is started by simply opening setup.
 - Location setup does not overwrite manual attendance, leave, public holiday, or note data.
 
@@ -259,17 +261,20 @@ ceil(adjustedEligibleDays * requiredPercentage)
 1. Start from a clean install with location permissions reset.
 2. Launch the app.
 3. Confirm no permission prompt appears on first launch.
-4. Navigate to Location Setup.
-5. Confirm Automatic Detection is shown as unavailable.
-6. Add or edit places without accepting a location permission prompt.
+4. Navigate to Location Setup and open a place editor.
+5. Confirm no permission prompt appears until you choose Use Current Location.
+6. Choose Use Current Location and review the in-app explanation before continuing.
+7. Continue, grant When In Use or Allow Once access, and wait for the selected address to appear.
+8. Repeat after resetting permission, deny access, and confirm address search and map selection remain available.
 
 ### Expected Results
 
-- No location permission request is offered while automatic detection is unavailable.
-- The app does not request When In Use or Always authorization.
-- Saved-place editing and manual attendance remain available.
+- When In Use authorization is requested only after the explicit current-location action and explanation.
+- The app never requests Always authorization.
+- Current location performs one selection request and does not keep updates running.
+- Denial produces a useful fallback instead of blocking saved-place editing or manual attendance.
 - Location-based inference remains disabled.
-- The app does not enable continuous GPS tracking.
+- The app does not enable background location mode, geofence monitoring, or continuous GPS tracking.
 
 ## 15. Privacy Checks: No Raw GPS Export By Default
 
@@ -279,7 +284,7 @@ ceil(adjustedEligibleDays * requiredPercentage)
 2. Create or simulate attendance evidence for the selected month.
 3. Generate CSV and PDF exports using default export options.
 4. Inspect both exported files.
-5. Search for latitude, longitude, coordinate pairs, raw event timestamps, and raw enter/exit event names.
+5. Search for the saved street addresses, latitude, longitude, coordinate pairs, raw event timestamps, and raw enter/exit event names.
 
 ### Expected Results
 
@@ -287,6 +292,7 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - Raw latitude values are not present.
 - Raw longitude values are not present.
 - Raw coordinate pairs are not present.
+- Saved home and office addresses are not present.
 - Raw location events are not present.
 - Raw GPS traces are not present.
 - Office/home attendance summaries may be included only as derived values such as classification, minutes, or compliance treatment.
@@ -368,7 +374,7 @@ ceil(adjustedEligibleDays * requiredPercentage)
 
 ### Expected Results
 
-- Copy accurately states that app-managed data is on-device and that shared copies are controlled by their destination.
+- Copy accurately states that app-managed data is on-device, Apple Maps handles user-initiated place lookup, and shared copies are controlled by their destination.
 - Cancellation is non-destructive.
 - Confirmation removes all user-owned records, user-edited holidays, and managed temporary reports.
 - Bundled holiday reference data remains available.
@@ -390,4 +396,4 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - Debug, Release, and static-analysis gates succeed.
 - The app targets iPhone and iPad only.
 - The production icon has standard, dark, and tinted variants.
-- The privacy manifest and App Store privacy answers match the no-network, no-tracking binary.
+- The privacy manifest and App Store privacy answers match the no-developer-collection, no-tracking binary and disclosed Apple Maps lookups.

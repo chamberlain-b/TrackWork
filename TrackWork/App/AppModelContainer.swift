@@ -95,7 +95,8 @@ enum AppModelContainer {
             name: "UI Test Office",
             type: .office,
             latitude: -37.8136,
-            longitude: 144.9631
+            longitude: 144.9631,
+            formattedAddress: "Melbourne VIC, Australia"
         )
         modelContext.insert(office)
         modelContext.insert(

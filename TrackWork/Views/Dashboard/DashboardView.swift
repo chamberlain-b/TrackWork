@@ -353,9 +353,10 @@ extension DashboardView {
                         }
 
                         MonthAtAGlanceSection(
-                            eligibleDaysToDate: eligibleDatesThroughToday.count,
+                            eligibleDaysToDate: summary.eligibleDaysToDate,
                             confirmedDays: confirmedDatesThroughToday.count,
-                            officeDays: completedOfficeDates.intersection(eligibleDatesThroughToday).count,
+                            officeShareToDate: summary.officeShareToDate,
+                            officeDaysToDate: summary.completedOfficeDays,
                             reviewDays: reviewDates.count
                         )
 

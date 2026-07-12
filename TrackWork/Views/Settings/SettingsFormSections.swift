@@ -20,8 +20,8 @@ struct SettingsLocationSection: View {
             Text("Location")
         } footer: {
             Text(
-                "Save home and office places by entering coordinates or choosing a point on the map. "
-                    + "Automatic detection is off in this MVP; manual attendance remains available."
+                "Save home and office places by searching for an address, using your current location, or "
+                    + "adjusting the map. Location is requested only when you choose it; background detection is off."
             )
         }
     }

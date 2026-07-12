@@ -221,6 +221,71 @@ final class ComplianceCalculatorTests: XCTestCase {
         XCTAssertEqual(summary.completedOfficeDays, 2)
     }
 
+    func testOfficeShareToDateIncludesEvaluationDayAndExcludesFutureDays() throws {
+        let input = input(
+            attendanceDays: [
+                attendance("2026-07-01", finalClassification: .office, officeMinutes: 180),
+                attendance("2026-07-03", finalClassification: .mixed, officeMinutes: 180),
+                attendance("2026-07-06", finalClassification: .office, officeMinutes: 180)
+            ],
+            requirement: .percentageOfEligibleDays(0.5),
+            evaluationDate: date("2026-07-03")
+        )
+
+        let summary = calculator.calculate(input)
+        let officeShareToDate = try XCTUnwrap(summary.officeShareToDate)
+
+        XCTAssertEqual(summary.eligibleDaysToDate, 3)
+        XCTAssertEqual(summary.completedOfficeDays, 2)
+        XCTAssertEqual(officeShareToDate, 2.0 / 3.0, accuracy: 0.000_001)
+    }
+
+    func testOfficeShareToDateUsesEligibleDaysAfterLeaveHolidayAndCustomExclusions() throws {
+        let input = input(
+            publicHolidays: [date("2026-07-02")],
+            leaveRecords: [leave("2026-07-06", type: .annualLeave)],
+            customExcludedDates: [date("2026-07-08")],
+            attendanceDays: [
+                attendance("2026-07-01", finalClassification: .office, officeMinutes: 180),
+                attendance("2026-07-02", finalClassification: .office, officeMinutes: 180),
+                attendance("2026-07-06", finalClassification: .office, officeMinutes: 180),
+                attendance("2026-07-08", finalClassification: .office, officeMinutes: 180),
+                attendance("2026-07-09", finalClassification: .mixed, officeMinutes: 180),
+                attendance("2026-07-13", finalClassification: .office, officeMinutes: 180)
+            ],
+            requirement: .percentageOfEligibleDays(0.5),
+            evaluationDate: date("2026-07-10")
+        )
+
+        let summary = calculator.calculate(input)
+        let officeShareToDate = try XCTUnwrap(summary.officeShareToDate)
+
+        XCTAssertEqual(summary.eligibleDaysToDate, 5)
+        XCTAssertEqual(summary.completedOfficeDays, 2)
+        XCTAssertEqual(officeShareToDate, 0.4, accuracy: 0.000_001)
+    }
+
+    func testOfficeShareToDateIsNilWhenNoEligibleDaysExistThroughEvaluationDate() {
+        let input = input(
+            publicHolidays: [
+                date("2026-07-01"),
+                date("2026-07-02"),
+                date("2026-07-03")
+            ],
+            attendanceDays: [
+                attendance("2026-07-01", finalClassification: .office, officeMinutes: 180)
+            ],
+            requirement: .percentageOfEligibleDays(0.5),
+            evaluationDate: date("2026-07-03")
+        )
+
+        let summary = calculator.calculate(input)
+
+        XCTAssertEqual(summary.eligibleDaysToDate, 0)
+        XCTAssertEqual(summary.completedOfficeDays, 0)
+        XCTAssertNil(summary.officeShareToDate)
+    }
+
     func testUnknownDaysAreCountedAsRequiringReview() {
         let input = input(
             attendanceDays: [

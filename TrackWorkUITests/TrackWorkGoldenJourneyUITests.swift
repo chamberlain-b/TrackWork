@@ -25,9 +25,27 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         app.buttons["Location Setup"].tap()
 
         XCTAssertTrue(app.navigationBars["Location Setup"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Automatic Detection"].exists)
-        XCTAssertTrue(app.staticTexts["Unavailable"].exists)
+        XCTAssertTrue(app.staticTexts["Place Selection"].exists)
         XCTAssertEqual(app.alerts.count, 0)
+
+        app.buttons["locationSetup.home"].tap()
+        XCTAssertTrue(app.buttons["placeEditor.searchAddress"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["placeEditor.useCurrentLocation"].exists)
+        XCTAssertFalse(app.buttons["placeEditor.save"].isEnabled)
+        XCTAssertEqual(app.alerts.count, 0)
+        attachScreenshot(named: "Location Place Editor")
+
+        app.buttons["placeEditor.useCurrentLocation"].tap()
+        let explanation = app.alerts["Use your current location?"]
+        XCTAssertTrue(explanation.waitForExistence(timeout: 3))
+        attachScreenshot(named: "Current Location Explanation")
+        explanation.buttons["Cancel"].tap()
+        XCTAssertTrue(explanation.waitForNonExistence(timeout: 3))
+
+        app.buttons["placeEditor.searchAddress"].tap()
+        XCTAssertTrue(app.navigationBars["Find a Place"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.alerts.count, 0)
+        attachScreenshot(named: "Address Search")
     }
 
     func testPopulatedSummaryPresentsPrimaryHierarchyAndDetails() {
@@ -35,13 +53,55 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         XCTAssertTrue(element(identifier: "dashboard.hero").waitForExistence(timeout: 8))
         XCTAssertTrue(reveal(identifier: "dashboard.atAGlance").exists)
+        XCTAssertTrue(reveal(identifier: "dashboard.officeShareToDate").exists)
         XCTAssertTrue(reveal(identifier: "dashboard.recentProgress").exists)
         XCTAssertTrue(reveal(identifier: "dashboard.calculation").exists)
+        attachScreenshot(named: "Populated Summary")
 
         let calculationDisclosure = reveal(identifier: "dashboard.calculation.disclosure")
         XCTAssertTrue(calculationDisclosure.isHittable)
         calculationDisclosure.tap()
         XCTAssertTrue(app.staticTexts["Scheduled workdays"].waitForExistence(timeout: 3))
+    }
+
+    func testCurrentLocationSelectionRequestsPermissionOnlyAfterRationale() {
+        app.launchEnvironment["TRACKWORK_UI_TESTING"] = "1"
+        app.launchEnvironment["TRACKWORK_UI_TEST_FIXTURE"] = "fresh"
+        app.resetAuthorizationStatus(for: .location)
+
+        var handledLocationPrompt = false
+        addUIInterruptionMonitor(withDescription: "Location permission") { alert in
+            for buttonTitle in ["Allow While Using App", "Allow Once"] {
+                let button = alert.buttons[buttonTitle]
+                if button.exists {
+                    handledLocationPrompt = true
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
+
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Location Setup"].tap()
+        app.buttons["locationSetup.home"].tap()
+
+        XCTAssertEqual(app.alerts.count, 0)
+        app.buttons["placeEditor.useCurrentLocation"].tap()
+
+        let explanation = app.alerts["Use your current location?"]
+        XCTAssertTrue(explanation.waitForExistence(timeout: 3))
+        explanation.buttons["Use Current Location"].tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.04)).tap()
+
+        XCTAssertTrue(element(identifier: "placeEditor.selectedPlace").waitForExistence(timeout: 15))
+        XCTAssertTrue(app.navigationBars["Home"].exists)
+        XCTAssertFalse(app.navigationBars["Choose Home"].exists)
+        XCTAssertTrue(app.buttons["placeEditor.save"].isEnabled)
+        XCTAssertTrue(handledLocationPrompt)
+        XCTAssertFalse(element(identifier: "placeEditor.locationError").exists)
+        attachScreenshot(named: "Current Location Selected")
     }
 
     func testSummaryCalendarActionOpensCalendar() {
@@ -52,6 +112,20 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         calendarAction.tap()
 
         XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5))
+    }
+
+    func testCalendarAndHistoryUseMatchingLargeHeaders() {
+        launch(fixture: "fresh")
+
+        app.tabBars.buttons["Calendar"].tap()
+        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitUntil(timeout: 3) { self.app.tabBars.buttons["Settings"].isHittable })
+        attachScreenshot(named: "Calendar")
+
+        app.tabBars.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitUntil(timeout: 3) { self.app.tabBars.buttons["Settings"].isHittable })
+        attachScreenshot(named: "History")
     }
 
     func testManualOverrideAndNotePersistFromCalendar() {
@@ -66,7 +140,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         let day = calendarDayElement()
         XCTAssertTrue(day.waitForExistence(timeout: 5))
-        XCTAssertTrue(day.label.localizedCaseInsensitiveContains("Office"), day.label)
+        XCTAssertTrue(day.valueText.localizedCaseInsensitiveContains("Office"), day.valueText)
 
         day.tap()
         XCTAssertTrue(element(identifier: "dayDetail.note").waitForExistence(timeout: 5))
@@ -82,7 +156,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         let day = calendarDayElement()
         XCTAssertTrue(day.waitForExistence(timeout: 5))
-        XCTAssertTrue(day.label.localizedCaseInsensitiveContains("Annual leave"), day.label)
+        XCTAssertTrue(day.valueText.localizedCaseInsensitiveContains("Annual leave"), day.valueText)
     }
 
     func testCustomExclusionPersistsFromCalendar() {
@@ -98,7 +172,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         let day = calendarDayElement()
         XCTAssertTrue(day.waitForExistence(timeout: 5))
-        XCTAssertTrue(day.label.localizedCaseInsensitiveContains("Custom exclusion"), day.label)
+        XCTAssertTrue(day.valueText.localizedCaseInsensitiveContains("Custom exclusion"), day.valueText)
     }
 
     func testCSVAndPDFExportsCompleteWithoutSharingSensitiveRawData() {
@@ -125,11 +199,11 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let seededDay = calendarDayElement()
         XCTAssertTrue(seededDay.waitForExistence(timeout: 5))
-        XCTAssertTrue(seededDay.label.localizedCaseInsensitiveContains("Office"), seededDay.label)
+        XCTAssertTrue(seededDay.valueText.localizedCaseInsensitiveContains("Office"), seededDay.valueText)
 
         app.tabBars.buttons["Settings"].tap()
         reveal(identifier: "settings.privacyData").tap()
-        element(identifier: "privacyData.deleteAll").tap()
+        reveal(identifier: "privacyData.deleteAll").tap()
         let confirmation = element(identifier: "privacyData.confirmDeleteAll")
         XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
         confirmation.tap()
@@ -138,7 +212,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         app.tabBars.buttons["Calendar"].tap()
         let resetDay = calendarDayElement()
         XCTAssertTrue(resetDay.waitForExistence(timeout: 5))
-        XCTAssertTrue(resetDay.label.localizedCaseInsensitiveContains("Needs review"), resetDay.label)
+        XCTAssertTrue(resetDay.valueText.localizedCaseInsensitiveContains("Needs review"), resetDay.valueText)
     }
 
     private func launch(fixture: String) {
@@ -253,6 +327,13 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         let predicate = NSPredicate { _, _ in condition() }
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func attachScreenshot(named name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
 

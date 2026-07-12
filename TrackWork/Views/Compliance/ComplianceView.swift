@@ -15,7 +15,6 @@ struct ComplianceView: View {
     private let usesNavigationStack: Bool
     private let calendar = Calendar.complianceCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
-    private let businessDayCalculator = BusinessDayCalculator()
 
     init(usesNavigationStack: Bool = true) {
         self.usesNavigationStack = usesNavigationStack
@@ -38,10 +37,6 @@ struct ComplianceView: View {
         complianceRules.first ?? ComplianceRule()
     }
 
-    private var selectedISOWeekdays: Set<Int> {
-        Set(activeRule.selectedISOWeekdays)
-    }
-
     private var periodAttendanceDays: [AttendanceDay] {
         attendanceDays.filter { periodRange.contains($0.date, calendar: calendar) }
     }
@@ -52,19 +47,6 @@ struct ComplianceView: View {
 
     private var periodCustomExcludedDays: [CustomExcludedDay] {
         customExcludedDays.filter { periodRange.contains($0.date, calendar: calendar) }
-    }
-
-    private var periodPublicHolidayDates: Set<Date> {
-        Set(
-            publicHolidays.compactMap { publicHoliday in
-                guard periodRange.contains(publicHoliday.date, calendar: calendar),
-                      publicHoliday.jurisdictionId == activeRule.jurisdictionId else {
-                    return nil
-                }
-
-                return calendar.startOfDay(for: publicHoliday.date)
-            }
-        )
     }
 
     private var summary: ComplianceSummary {
@@ -83,44 +65,11 @@ struct ComplianceView: View {
     }
 
     private var elapsedEligibleDays: Int {
-        let cutoff = min(today, periodRange.end)
-        guard cutoff >= periodRange.start else {
-            return 0
-        }
-
-        let eligibleDates = businessDayCalculator.eligibleDates(
-            from: periodRange.start,
-            through: cutoff,
-            calendar: calendar,
-            selectedISOWeekdays: selectedISOWeekdays,
-            publicHolidays: periodPublicHolidayDates
-        )
-        let leaveDates = Set(
-            periodLeaveRecords.compactMap { leaveRecord -> Date? in
-                guard leaveRecord.duration == .fullDay else {
-                    return nil
-                }
-
-                let date = calendar.startOfDay(for: leaveRecord.date)
-                return eligibleDates.contains(date) ? date : nil
-            }
-        )
-        let excludedDates = Set(
-            periodCustomExcludedDays.compactMap { excludedDay -> Date? in
-                let date = calendar.startOfDay(for: excludedDay.date)
-                return eligibleDates.contains(date) ? date : nil
-            }
-        )
-
-        return eligibleDates.subtracting(leaveDates.union(excludedDates)).count
+        summary.eligibleDaysToDate
     }
 
     private var actualPercentage: Double? {
-        guard elapsedEligibleDays > 0 else {
-            return nil
-        }
-
-        return Double(summary.completedOfficeDays) / Double(elapsedEligibleDays)
+        summary.officeShareToDate
     }
 
     private var remainingOfficeDays: Int {

@@ -1,3 +1,4 @@
+import CoreLocation
 import MapKit
 import SwiftUI
 
@@ -6,22 +7,28 @@ struct MapPickerView: View {
 
     let placeType: PlaceType
     let radiusMeters: Double
-    let onSelection: (CLLocationCoordinate2D) -> Void
+    let onSelection: (PlaceSelection) -> Void
 
     @State private var selectedCoordinate: CLLocationCoordinate2D
+    @State private var selectedAddress: String
     @State private var cameraPosition: MapCameraPosition
+    @State private var selectionRevision = 0
+    @State private var isResolvingAddress = false
+
+    private let lookupService = PlaceLookupService()
 
     init(
         placeType: PlaceType,
-        initialCoordinate: CLLocationCoordinate2D?,
+        initialSelection: PlaceSelection?,
         radiusMeters: Double,
-        onSelection: @escaping (CLLocationCoordinate2D) -> Void
+        onSelection: @escaping (PlaceSelection) -> Void
     ) {
-        let coordinate = initialCoordinate ?? Self.defaultCoordinate
+        let coordinate = initialSelection?.coordinate ?? Self.defaultCoordinate
         self.placeType = placeType
         self.radiusMeters = radiusMeters
         self.onSelection = onSelection
         _selectedCoordinate = State(initialValue: coordinate)
+        _selectedAddress = State(initialValue: initialSelection?.formattedAddress ?? "Pinned location")
         _cameraPosition = State(initialValue: .region(Self.region(centeredOn: coordinate)))
     }
 
@@ -46,25 +53,35 @@ struct MapPickerView: View {
                     guard let coordinate = proxy.convert(point, from: .local) else {
                         return
                     }
-                    updateSelectedCoordinate(coordinate, recenter: false)
+                    updateSelectedCoordinate(coordinate)
                 }
                 .accessibilityIdentifier("mapPicker.map")
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Selected Coordinate")
-                            .font(AppTypography.caption)
+            VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                HStack(alignment: .top, spacing: AppSpacing.sm) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(Color.ds.accentPrimary)
+
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text("Selected place")
+                            .font(AppTypography.captionStrong)
                             .foregroundStyle(Color.ds.textSecondary)
 
-                        Text(Self.formattedCoordinatePair(selectedCoordinate))
-                            .font(AppTypography.body)
-                            .foregroundStyle(Color.ds.textPrimary)
-                            .monospacedDigit()
+                        if isResolvingAddress {
+                            Text("Finding address…")
+                                .font(AppTypography.body)
+                                .foregroundStyle(Color.ds.textSecondary)
+                        } else {
+                            Text(selectedAddress)
+                                .font(AppTypography.body)
+                                .foregroundStyle(Color.ds.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
 
-                    Spacer()
+                    Spacer(minLength: AppSpacing.sm)
 
                     Button {
                         useMapCenter()
@@ -75,28 +92,41 @@ struct MapPickerView: View {
                     .accessibilityIdentifier("mapPicker.useCenter")
                 }
 
-                Text("Tap the map to move the pin, or pan and zoom the map then use the center point. This does not request current location access.")
+                Text("Tap the map to move the pin, or position the map and choose Use Center.")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
             }
-            .padding()
+            .padding(AppSpacing.md)
             .background(Color.ds.surfacePrimary)
         }
         .navigationTitle("Choose \(placeType.displayName)")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
-                }
+                Button("Cancel") { dismiss() }
             }
 
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") {
-                    onSelection(selectedCoordinate)
+                    onSelection(
+                        PlaceSelection(
+                            coordinate: selectedCoordinate,
+                            formattedAddress: selectedAddress
+                        )
+                    )
                     dismiss()
                 }
                 .accessibilityIdentifier("mapPicker.done")
+            }
+        }
+        .task(id: selectionRevision) {
+            do {
+                try await Task.sleep(for: .milliseconds(450))
+                await resolveSelectedAddress()
+            } catch is CancellationError {
+                return
+            } catch {
+                return
             }
         }
     }
@@ -106,20 +136,27 @@ struct MapPickerView: View {
             return
         }
 
-        updateSelectedCoordinate(center, recenter: false)
+        updateSelectedCoordinate(center)
     }
 
-    private func updateSelectedCoordinate(_ coordinate: CLLocationCoordinate2D, recenter: Bool) {
-        let clampedCoordinate = CLLocationCoordinate2D(
+    private func updateSelectedCoordinate(_ coordinate: CLLocationCoordinate2D) {
+        selectedCoordinate = CLLocationCoordinate2D(
             latitude: min(max(coordinate.latitude, -90), 90),
             longitude: min(max(coordinate.longitude, -180), 180)
         )
+        selectedAddress = "Pinned location"
+        selectionRevision += 1
+    }
 
-        selectedCoordinate = clampedCoordinate
-
-        if recenter {
-            cameraPosition = .region(Self.region(centeredOn: clampedCoordinate))
-        }
+    private func resolveSelectedAddress() async {
+        isResolvingAddress = true
+        let location = CLLocation(
+            latitude: selectedCoordinate.latitude,
+            longitude: selectedCoordinate.longitude
+        )
+        let resolvedSelection = await lookupService.selection(for: location)
+        selectedAddress = resolvedSelection.formattedAddress
+        isResolvingAddress = false
     }
 
     private static func region(centeredOn coordinate: CLLocationCoordinate2D) -> MKCoordinateRegion {
@@ -129,23 +166,6 @@ struct MapPickerView: View {
             longitudinalMeters: 1600
         )
     }
-
-    private static func formattedCoordinatePair(_ coordinate: CLLocationCoordinate2D) -> String {
-        "\(formattedCoordinate(coordinate.latitude)), \(formattedCoordinate(coordinate.longitude))"
-    }
-
-    private static func formattedCoordinate(_ coordinate: Double) -> String {
-        coordinateFormatter.string(from: NSNumber(value: coordinate)) ?? ""
-    }
-
-    private static let coordinateFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 6
-        formatter.usesGroupingSeparator = false
-        return formatter
-    }()
 
     private static let defaultCoordinate = CLLocationCoordinate2D(
         latitude: -37.8136,
@@ -157,7 +177,11 @@ struct MapPickerView: View {
     NavigationStack {
         MapPickerView(
             placeType: .office,
-            initialCoordinate: CLLocationCoordinate2D(latitude: -37.8136, longitude: 144.9631),
+            initialSelection: PlaceSelection(
+                latitude: -37.8136,
+                longitude: 144.9631,
+                formattedAddress: "Melbourne VIC, Australia"
+            ),
             radiusMeters: 150
         ) { _ in }
     }

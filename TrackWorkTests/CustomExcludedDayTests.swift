@@ -22,3 +22,182 @@ final class CustomExcludedDayTests: XCTestCase {
         XCTAssertEqual(storedDays.first?.reason, "Company closure")
     }
 }
+
+final class CalendarDayPresentationTests: XCTestCase {
+    private var calendar: Calendar!
+    private var referenceDate: Date!
+
+    override func setUp() {
+        super.setUp()
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.firstWeekday = 2
+        self.calendar = calendar
+        referenceDate = date(year: 2026, month: 7, day: 15)
+    }
+
+    override func tearDown() {
+        referenceDate = nil
+        calendar = nil
+        super.tearDown()
+    }
+
+    func testScheduledPastUnknownDayNeedsReview() {
+        let presentation = makePresentation(
+            date: date(year: 2026, month: 7, day: 7)
+        )
+
+        assertKind(presentation, is: .review)
+        XCTAssertEqual(presentation.token, "!")
+        XCTAssertEqual(presentation.label, "Needs review")
+    }
+
+    func testPastNonSelectedWeekdayIsNotRequired() {
+        let presentation = makePresentation(
+            date: date(year: 2026, month: 7, day: 11)
+        )
+
+        assertKind(presentation, is: .notRequired)
+        XCTAssertNil(presentation.token)
+        XCTAssertEqual(presentation.label, "Not a scheduled workday")
+    }
+
+    func testPublicHolidayTakesPrecedenceOverLeaveExclusionAndAttendance() {
+        let subjectDate = date(year: 2026, month: 7, day: 7)
+        let presentation = makePresentation(
+            date: subjectDate,
+            attendanceDay: AttendanceDay(
+                date: subjectDate,
+                detectedClassification: .office,
+                finalClassification: .office,
+                complianceTreatment: .countsAsOffice
+            ),
+            leaveRecord: LeaveRecord(date: subjectDate, leaveType: .annualLeave),
+            publicHoliday: PublicHoliday(
+                date: subjectDate,
+                name: "Test Holiday",
+                country: .australia,
+                jurisdictionId: "AU-VIC",
+                isRegional: false,
+                sourceName: "Test fixture"
+            ),
+            customExcludedDay: CustomExcludedDay(date: subjectDate)
+        )
+
+        assertKind(presentation, is: .publicHoliday)
+        XCTAssertEqual(presentation.token, "PH")
+        XCTAssertEqual(presentation.label, "Public holiday, Test Holiday")
+    }
+
+    func testLeaveTakesPrecedenceOverExclusionAndAttendance() {
+        let subjectDate = date(year: 2026, month: 7, day: 7)
+        let presentation = makePresentation(
+            date: subjectDate,
+            attendanceDay: AttendanceDay(
+                date: subjectDate,
+                detectedClassification: .office,
+                finalClassification: .office,
+                complianceTreatment: .countsAsOffice
+            ),
+            leaveRecord: LeaveRecord(date: subjectDate, leaveType: .annualLeave),
+            customExcludedDay: CustomExcludedDay(date: subjectDate)
+        )
+
+        assertKind(presentation, is: .annualLeave)
+        XCTAssertEqual(presentation.token, "AL")
+        XCTAssertEqual(presentation.label, LeaveType.annualLeave.displayName)
+    }
+
+    func testCustomExclusionTakesPrecedenceOverAttendance() {
+        let subjectDate = date(year: 2026, month: 7, day: 7)
+        let presentation = makePresentation(
+            date: subjectDate,
+            attendanceDay: AttendanceDay(
+                date: subjectDate,
+                detectedClassification: .office,
+                finalClassification: .office,
+                complianceTreatment: .countsAsOffice
+            ),
+            customExcludedDay: CustomExcludedDay(date: subjectDate)
+        )
+
+        assertKind(presentation, is: .excluded)
+        XCTAssertEqual(presentation.token, "EX")
+        XCTAssertEqual(presentation.label, "Custom exclusion")
+    }
+
+    private func makePresentation(
+        date: Date,
+        attendanceDay: AttendanceDay? = nil,
+        leaveRecord: LeaveRecord? = nil,
+        publicHoliday: PublicHoliday? = nil,
+        customExcludedDay: CustomExcludedDay? = nil
+    ) -> CalendarDayPresentation {
+        CalendarDayPresentation(
+            date: date,
+            attendanceDay: attendanceDay,
+            leaveRecord: leaveRecord,
+            publicHoliday: publicHoliday,
+            customExcludedDay: customExcludedDay,
+            selectedISOWeekdays: [1, 2, 3, 4, 5],
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
+    }
+
+    private func assertKind(
+        _ presentation: CalendarDayPresentation,
+        is expectedKind: CalendarDayPresentation.Kind,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard kindsMatch(presentation.kind, expectedKind) else {
+            XCTFail(
+                "Expected calendar day kind \(expectedKind), got \(presentation.kind)",
+                file: file,
+                line: line
+            )
+            return
+        }
+    }
+
+    private func kindsMatch(
+        _ first: CalendarDayPresentation.Kind,
+        _ second: CalendarDayPresentation.Kind
+    ) -> Bool {
+        switch (first, second) {
+        case (.office, .office),
+             (.home, .home),
+             (.mixed, .mixed),
+             (.annualLeave, .annualLeave),
+             (.sickLeave, .sickLeave),
+             (.publicHoliday, .publicHoliday),
+             (.excluded, .excluded),
+             (.review, .review),
+             (.notRequired, .notRequired),
+             (.upcoming, .upcoming):
+            true
+        default:
+            false
+        }
+    }
+
+    private func date(year: Int, month: Int, day: Int) -> Date {
+        guard let date = calendar.date(
+            from: DateComponents(
+                calendar: calendar,
+                timeZone: calendar.timeZone,
+                year: year,
+                month: month,
+                day: day
+            )
+        ) else {
+            XCTFail("Invalid test fixture date: \(year)-\(month)-\(day)")
+            return Date(timeIntervalSince1970: 0)
+        }
+
+        return date
+    }
+}

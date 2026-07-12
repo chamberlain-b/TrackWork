@@ -41,10 +41,19 @@ struct BusinessDayCalculator {
 struct ComplianceSummary: Equatable {
     let baseEligibleDays: Int
     let adjustedEligibleDays: Int
+    let eligibleDaysToDate: Int
     let customExcludedDays: Int
     let requiredOfficeDays: Int
     let completedOfficeDays: Int
     let reviewRequiredDays: Int
+
+    var officeShareToDate: Double? {
+        guard eligibleDaysToDate > 0 else {
+            return nil
+        }
+
+        return Double(completedOfficeDays) / Double(eligibleDaysToDate)
+    }
 }
 
 struct ComplianceCalculator {
@@ -133,6 +142,11 @@ struct ComplianceCalculator {
             .subtracting(leaveAdjustedDates)
             .subtracting(effectiveCustomExcludedDates)
         let adjustedEligibleDays = adjustedEligibleDates.count
+        let eligibleDaysToDate = eligibleDaysToDate(
+            in: adjustedEligibleDates,
+            evaluationDate: input.evaluationDate,
+            calendar: input.calendar
+        )
         let requiredOfficeDays = requiredOfficeDays(
             for: input.requirement,
             baseEligibleDays: baseEligibleDays,
@@ -155,11 +169,25 @@ struct ComplianceCalculator {
         return Summary(
             baseEligibleDays: baseEligibleDays,
             adjustedEligibleDays: adjustedEligibleDays,
+            eligibleDaysToDate: eligibleDaysToDate,
             customExcludedDays: effectiveCustomExcludedDates.count,
             requiredOfficeDays: requiredOfficeDays,
             completedOfficeDays: completedOfficeDays,
             reviewRequiredDays: reviewRequiredDays
         )
+    }
+
+    private func eligibleDaysToDate(
+        in eligibleDates: Set<Date>,
+        evaluationDate: Date?,
+        calendar: Calendar
+    ) -> Int {
+        guard let evaluationDate else {
+            return eligibleDates.count
+        }
+
+        let cutoff = calendar.startOfDay(for: evaluationDate)
+        return eligibleDates.filter { $0 <= cutoff }.count
     }
 
     private func eligibleLeaveDates(

@@ -16,19 +16,26 @@ struct LocationSetupView: View {
     var body: some View {
         List {
             Section {
-                LabeledContent {
-                    Text("Unavailable")
-                        .foregroundStyle(Color.ds.textSecondary)
-                } label: {
-                    Label("Background location", systemImage: "location.slash")
+                Label {
+                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                        Text("Choose places without technical coordinates")
+                            .font(AppTypography.headline)
+                            .foregroundStyle(Color.ds.textPrimary)
+
+                        Text("Search an address, use your current location once, or adjust the pin on a map.")
+                            .font(AppTypography.caption)
+                            .foregroundStyle(Color.ds.textSecondary)
+                    }
+                } icon: {
+                    Image(systemName: "map.fill")
+                        .foregroundStyle(Color.ds.accentPrimary)
                 }
             } header: {
-                Text("Automatic Detection")
+                Text("Place Selection")
             } footer: {
                 Text(
-                    "Automatic location detection and permission requests are intentionally unavailable in this "
-                        + "MVP build. Save places by entering coordinates or choosing a point on the map; manual "
-                        + "attendance remains available."
+                    "Saving a place does not enable automatic attendance detection, background location, or "
+                        + "continuous tracking. Manual attendance remains available."
                 )
             }
 
@@ -38,7 +45,7 @@ struct LocationSetupView: View {
             } header: {
                 Text("Places")
             } footer: {
-                Text(locationTrackingService.statusDescription)
+                Text("Home and office locations are stored on this device and excluded from standard reports.")
             }
         }
         .navigationTitle("Location Setup")
@@ -86,7 +93,7 @@ struct LocationSetupView: View {
         }
 
         let radius = place.radiusMeters.formatted(.number.precision(.fractionLength(0)))
-        return "Saved place · \(radius) m radius"
+        return "\(place.displayAddress) · \(radius) m area"
     }
 
 }

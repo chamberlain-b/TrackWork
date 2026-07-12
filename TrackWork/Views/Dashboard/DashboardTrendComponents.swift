@@ -6,7 +6,8 @@ struct MonthAtAGlanceSection: View {
 
     let eligibleDaysToDate: Int
     let confirmedDays: Int
-    let officeDays: Int
+    let officeShareToDate: Double?
+    let officeDaysToDate: Int
     let reviewDays: Int
 
     var body: some View {
@@ -36,11 +37,16 @@ struct MonthAtAGlanceSection: View {
 
                 DSMetricTile(
                     systemImage: "building.2.fill",
-                    label: "Office",
-                    value: officeDays.formatted(),
-                    subtitle: "Counts toward target",
+                    label: "Office share to date",
+                    value: officeShareToDate?.formatted(
+                        .percent.precision(.fractionLength(0...1))
+                    ) ?? "—",
+                    subtitle: eligibleDaysToDate > 0
+                        ? "\(officeDaysToDate) of \(eligibleDaysToDate) eligible days"
+                        : "No eligible days yet",
                     statusColor: Color.ds.officeDay
                 )
+                .accessibilityIdentifier("dashboard.officeShareToDate")
 
                 DSMetricTile(
                     systemImage: reviewDays == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",

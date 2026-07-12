@@ -92,8 +92,8 @@ struct RecordsView: View {
             }
             .scrollContentBackground(.hidden)
             .appScreenBackground()
-            .navigationTitle("Records")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("History")
+            .navigationBarTitleDisplayMode(.large)
         }
     }
 }

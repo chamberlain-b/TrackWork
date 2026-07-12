@@ -92,7 +92,9 @@ struct ComplianceHeroCard: View {
         DSProgressCard(
             sectionTitle: monthTitle,
             metricText: targetIsConfigured ? "\(completedOfficeDays) of \(requiredOfficeDays)" : "No target",
-            detailText: targetIsConfigured ? "office days completed" : "Setup required",
+            detailText: targetIsConfigured
+                ? "\(requiredOfficeDays) office days required this month"
+                : "Setup required",
             progress: progress,
             statusText: status.title,
             statusSystemImage: status.systemImage,

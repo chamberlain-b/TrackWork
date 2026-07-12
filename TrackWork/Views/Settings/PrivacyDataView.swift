@@ -14,7 +14,7 @@ struct PrivacyDataView: View {
             Section {
                 Label {
                     Text(
-                        "Attendance, leave, notes, compliance settings, saved places, and location events "
+                        "Attendance, leave, notes, compliance settings, saved addresses and coordinates, and location events "
                             + "stay in this app's on-device storage."
                     )
                 } icon: {
@@ -32,6 +32,30 @@ struct PrivacyDataView: View {
                 Text("On-Device Storage")
             } footer: {
                 Text("Your device backup settings are controlled by iOS and may retain earlier app data.")
+            }
+
+            Section {
+                Label {
+                    Text(
+                        "Address search and lookup are provided by Apple Maps when you choose them. Work Track's "
+                            + "developer does not receive the search or location."
+                    )
+                } icon: {
+                    Image(systemName: "map.fill")
+                        .foregroundStyle(Color.ds.info)
+                }
+
+                Label {
+                    Text(
+                        "Current location is requested only for a one-time place selection. Work Track does not "
+                            + "request Always access or track location continuously."
+                    )
+                } icon: {
+                    Image(systemName: "location.fill")
+                        .foregroundStyle(Color.ds.success)
+                }
+            } header: {
+                Text("Location")
             }
 
             Section {

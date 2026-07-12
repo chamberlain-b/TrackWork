@@ -125,7 +125,9 @@ CSV fields must remain safe when opened in spreadsheet software, including neutr
 ### 2.8 Privacy and data management
 
 - User data is stored in the app's local SwiftData store by default.
-- The app has no account, analytics, advertising, app-managed cloud sync, or app network service in the MVP.
+- The app has no account, analytics, advertising, app-managed cloud sync, or developer-operated network service in the MVP.
+- User-initiated address search and address lookup use Apple Maps. Apple may process the search text, map context, or location under its privacy terms; the Work Track developer does not receive that data.
+- Saved place names, formatted addresses, coordinates, and radii remain in the app's on-device SwiftData store.
 - Bundled holiday source URLs are attribution metadata; the MVP does not fetch those URLs.
 - Generated reports leave the app only when the user invokes the system share flow.
 - Settings provides a Privacy & Data screen describing local storage and export behavior.
@@ -135,9 +137,11 @@ CSV fields must remain safe when opened in spreadsheet software, including neutr
 
 ### 2.9 Location scope
 
-The MVP supports saving one home and one office place by coordinates or map selection. Automatic background detection is intentionally unavailable:
+The MVP supports saving one home and one office place primarily by address search or current location, with map adjustment as a fallback. Coordinates remain stored on-device for location logic but are not exposed as normal user input. Automatic background detection is intentionally unavailable:
 
-- Do not request location permission on first launch.
+- Do not request location permission on first launch, when opening setup, or when searching for an address.
+- Request When In Use authorization only after the user explicitly chooses Use Current Location and sees an in-app explanation.
+- Use a single current-location request to select the place; do not keep location updates running.
 - Do not request Always authorization in the MVP.
 - Do not enable the Background Modes location capability.
 - Do not start geofence monitoring in the production MVP path.
@@ -159,9 +163,10 @@ The live implementation includes:
 - Bundled 2026 holiday data for every supported AU and NZ jurisdiction.
 - NZ national-to-regional holiday inheritance and active-jurisdiction filtering.
 - Styled PDF and spreadsheet-safe CSV export.
+- Address-first home and office place setup with explicit, one-shot current-location selection.
 - Privacy explanations and confirmed on-device reset.
 - Unit and UI test targets in the shared Xcode scheme.
-- A privacy manifest declaring no tracking or collected data for the current local-only build.
+- A privacy manifest declaring no tracking or data collection by the developer for the current build.
 
 This baseline must continue to compile and pass tests as release work proceeds.
 
