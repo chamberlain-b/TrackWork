@@ -1,36 +1,60 @@
-#if DEBUG
 import SwiftData
 import SwiftUI
 
 struct RecentLocationEventsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(LocationTrackingService.self) private var locationTrackingService
     @Query(sort: \LocationEvent.occurredAt, order: .reverse) private var events: [LocationEvent]
-
-    private var recentEvents: [LocationEvent] {
-        Array(events.prefix(50))
-    }
+    @State private var isShowingClearConfirmation = false
+    @State private var clearError: String?
 
     var body: some View {
         List {
-            if recentEvents.isEmpty {
+            if events.isEmpty {
                 ContentUnavailableView(
                     "No Location Events",
                     systemImage: "location.slash",
-                    description: Text("Enter and exit events from saved Home and Office geofences will appear here in debug builds.")
+                    description: Text(
+                        "Automatic Attendance events appear here."
+                    )
                 )
             } else {
                 Section {
-                    ForEach(recentEvents) { event in
+                    ForEach(events) { event in
                         eventRow(event)
                     }
                 } header: {
                     Text("Recent Events")
                 } footer: {
-                    Text("Debug only. Default reports do not export raw location events or GPS coordinates.")
+                    Text("Stored on this device. Excluded from standard reports and backups.")
+                }
+            }
+
+            if let clearError {
+                Section {
+                    Label(clearError, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.ds.critical)
                 }
             }
         }
         .navigationTitle("Location Events")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !events.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Clear", systemImage: "trash", role: .destructive) {
+                        isShowingClearConfirmation = true
+                    }
+                    .accessibilityIdentifier("locationEvents.clear")
+                }
+            }
+        }
+        .alert("Clear all location events?", isPresented: $isShowingClearConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear Events", role: .destructive, action: clearEvents)
+        } message: {
+            Text("Deletes entry and exit events. Attendance records remain.")
+        }
     }
 
     private func eventRow(_ event: LocationEvent) -> some View {
@@ -58,10 +82,6 @@ struct RecentLocationEventsView: View {
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
 
-                Text(event.regionIdentifier)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textTertiary)
-                    .lineLimit(1)
             }
         }
         .padding(.vertical, 4)
@@ -84,6 +104,18 @@ struct RecentLocationEventsView: View {
             Color.ds.textTertiary
         }
     }
+
+    private func clearEvents() {
+        events.forEach(modelContext.delete)
+        do {
+            try modelContext.save()
+            locationTrackingService.reseedCurrentRegionStates()
+            clearError = nil
+        } catch {
+            modelContext.rollback()
+            clearError = "Location events could not be cleared. Try again."
+        }
+    }
 }
 
 #Preview {
@@ -91,5 +123,5 @@ struct RecentLocationEventsView: View {
         RecentLocationEventsView()
     }
     .modelContainer(PreviewData.modelContainer())
+    .environment(LocationTrackingService())
 }
-#endif

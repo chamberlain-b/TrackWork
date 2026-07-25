@@ -183,6 +183,7 @@ enum PreviewData {
             ManualAdjustment.self,
             ComplianceRule.self,
             CustomExcludedDay.self,
+            PlannedOfficeDay.self,
             Place.self,
             LocationEvent.self,
             PublicHoliday.self

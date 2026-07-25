@@ -2,19 +2,17 @@ import SwiftUI
 
 struct LegendPill: View {
     let text: String
-    let token: String
+    let systemImage: String
     let color: Color
 
     var body: some View {
         HStack(spacing: AppSpacing.xs) {
-            Circle()
-                .fill(color)
-                .frame(width: 7, height: 7)
-
-            Text(token)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(Color.ds.textPrimary)
-                .frame(minWidth: 20, alignment: .leading)
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(color)
+                .frame(width: 24, height: 24)
+                .background(color.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
 
             Text(text)
                 .font(AppTypography.caption)
@@ -37,114 +35,7 @@ struct CalendarDay: Identifiable {
     let leaveRecord: LeaveRecord?
     let publicHoliday: PublicHoliday?
     let customExcludedDay: CustomExcludedDay?
-}
-
-struct CalendarDayPresentation {
-    enum Kind {
-        case office
-        case home
-        case mixed
-        case annualLeave
-        case sickLeave
-        case publicHoliday
-        case excluded
-        case review
-        case notRequired
-        case upcoming
-    }
-
-    let kind: Kind
-    let token: String?
-    let label: String
-    let color: Color
-
-    var cellBackground: Color {
-        switch kind {
-        case .review:
-            color.opacity(0.10)
-        case .office, .home, .mixed, .annualLeave, .sickLeave, .publicHoliday, .excluded:
-            color.opacity(0.055)
-        case .notRequired, .upcoming:
-            Color.clear
-        }
-    }
-
-    var isQuiet: Bool {
-        kind == .notRequired || kind == .upcoming
-    }
-
-    init(
-        date: Date,
-        attendanceDay: AttendanceDay?,
-        leaveRecord: LeaveRecord?,
-        publicHoliday: PublicHoliday?,
-        customExcludedDay: CustomExcludedDay?,
-        selectedISOWeekdays: Set<Int>,
-        calendar: Calendar,
-        referenceDate: Date
-    ) {
-        let finalClassification = attendanceDay?.finalClassification ?? .unknown
-        let recordedLeave = leaveRecord?.leaveType ?? finalClassification.leaveType
-
-        if let publicHoliday {
-            kind = .publicHoliday
-            token = "PH"
-            label = "Public holiday, \(publicHoliday.name)"
-            color = Color.ds.publicHoliday
-        } else if finalClassification == .publicHoliday {
-            kind = .publicHoliday
-            token = "PH"
-            label = "Public holiday"
-            color = Color.ds.publicHoliday
-        } else if recordedLeave == .annualLeave {
-            kind = .annualLeave
-            token = "AL"
-            label = LeaveType.annualLeave.displayName
-            color = Color.ds.leaveDay
-        } else if recordedLeave == .sickLeave {
-            kind = .sickLeave
-            token = "SL"
-            label = LeaveType.sickLeave.displayName
-            color = Color.ds.leaveDay
-        } else if customExcludedDay != nil {
-            kind = .excluded
-            token = "EX"
-            label = "Custom exclusion"
-            color = Color.ds.textSecondary
-        } else if finalClassification == .office {
-            kind = .office
-            token = "O"
-            label = AttendanceClassification.office.displayName
-            color = Color.ds.officeDay
-        } else if finalClassification == .home {
-            kind = .home
-            token = "H"
-            label = AttendanceClassification.home.displayName
-            color = Color.ds.homeDay
-        } else if finalClassification == .mixed {
-            kind = .mixed
-            token = "M"
-            label = AttendanceClassification.mixed.displayName
-            color = Color.ds.info
-        } else if !selectedISOWeekdays.contains(calendar.isoWeekday(for: date))
-            || finalClassification == .weekend
-            || finalClassification == .nonWorkingDay {
-            kind = .notRequired
-            token = nil
-            label = "Not a scheduled workday"
-            color = Color.ds.textTertiary
-        } else if calendar.startOfDay(for: date) > calendar.startOfDay(for: referenceDate) {
-            kind = .upcoming
-            token = nil
-            label = "Upcoming workday"
-            color = Color.ds.textTertiary
-        } else {
-            kind = .review
-            token = "!"
-            label = "Needs review"
-            color = Color.ds.warning
-        }
-    }
+    let plannedOfficeDay: PlannedOfficeDay?
 }
 
 struct DayCell: View {
@@ -153,6 +44,7 @@ struct DayCell: View {
     let leaveRecord: LeaveRecord?
     let publicHoliday: PublicHoliday?
     let customExcludedDay: CustomExcludedDay?
+    let plannedOfficeDay: PlannedOfficeDay?
     let selectedISOWeekdays: Set<Int>
     let calendar: Calendar
     let referenceDate: Date
@@ -168,6 +60,7 @@ struct DayCell: View {
             leaveRecord: leaveRecord,
             publicHoliday: publicHoliday,
             customExcludedDay: customExcludedDay,
+            plannedOfficeDay: plannedOfficeDay,
             selectedISOWeekdays: selectedISOWeekdays,
             calendar: calendar,
             referenceDate: referenceDate
@@ -197,22 +90,17 @@ struct DayCell: View {
 
             Spacer(minLength: 0)
 
-            if let token = presentation.token {
-                HStack(spacing: 3) {
-                    Circle()
-                        .fill(presentation.color)
-                        .frame(width: 5, height: 5)
-
-                    Text(token)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.ds.textPrimary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, minHeight: 18)
-                .background(
-                    presentation.color.opacity(0.13),
-                    in: RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous)
-                )
+            if let systemImage = presentation.systemImage {
+                Image(systemName: markerSystemImage(systemImage))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(presentation.color)
+                    .frame(width: 28, height: 20)
+                    .background(
+                        presentation.kind == .review
+                            ? Color.clear
+                            : presentation.color.opacity(0.11),
+                        in: Capsule(style: .continuous)
+                    )
             }
         }
         .padding(6)
@@ -232,6 +120,10 @@ struct DayCell: View {
     private var dayNumberColor: Color {
         presentation.isQuiet ? Color.ds.textTertiary : Color.ds.textPrimary
     }
+
+    private func markerSystemImage(_ defaultImage: String) -> String {
+        presentation.kind == .review ? "exclamationmark.circle.fill" : defaultImage
+    }
 }
 
 struct CalendarAgendaRow: View {
@@ -240,6 +132,7 @@ struct CalendarAgendaRow: View {
     let leaveRecord: LeaveRecord?
     let publicHoliday: PublicHoliday?
     let customExcludedDay: CustomExcludedDay?
+    let plannedOfficeDay: PlannedOfficeDay?
     let selectedISOWeekdays: Set<Int>
     let calendar: Calendar
     let referenceDate: Date
@@ -251,6 +144,7 @@ struct CalendarAgendaRow: View {
             leaveRecord: leaveRecord,
             publicHoliday: publicHoliday,
             customExcludedDay: customExcludedDay,
+            plannedOfficeDay: plannedOfficeDay,
             selectedISOWeekdays: selectedISOWeekdays,
             calendar: calendar,
             referenceDate: referenceDate

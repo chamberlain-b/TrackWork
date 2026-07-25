@@ -29,6 +29,7 @@ enum AppModelContainer {
             ManualAdjustment.self,
             ComplianceRule.self,
             CustomExcludedDay.self,
+            PlannedOfficeDay.self,
             Place.self,
             LocationEvent.self,
             PublicHoliday.self
@@ -90,7 +91,11 @@ enum AppModelContainer {
                 note: "UI test manual correction"
             )
         )
+        insertPopulatedLocationFixture(on: date, in: modelContext)
+        try modelContext.save()
+    }
 
+    private static func insertPopulatedLocationFixture(on date: Date, in modelContext: ModelContext) {
         let office = Place(
             name: "UI Test Office",
             type: .office,
@@ -109,8 +114,9 @@ enum AppModelContainer {
                 occurredAt: date
             )
         )
-
-        try modelContext.save()
+        if let plannedDate = uiTestPlannedOfficeDate() {
+            modelContext.insert(PlannedOfficeDay(date: plannedDate))
+        }
     }
 
     private static func uiTestDate() -> Date {
@@ -133,5 +139,24 @@ enum AppModelContainer {
         }
 
         return date
+    }
+
+    private static func uiTestPlannedOfficeDate() -> Date? {
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: .now)
+        let month = calendar.component(.month, from: today)
+        let year = calendar.component(.year, from: today)
+        var candidate = calendar.date(byAdding: .day, value: 1, to: today)
+
+        while let date = candidate,
+              calendar.component(.month, from: date) == month,
+              calendar.component(.year, from: date) == year {
+            if (2...6).contains(calendar.component(.weekday, from: date)) {
+                return date
+            }
+            candidate = calendar.date(byAdding: .day, value: 1, to: date)
+        }
+
+        return nil
     }
 }

@@ -83,7 +83,10 @@ struct AttendanceInferenceService {
         selectedISOWeekdays: Set<Int> = [1, 2, 3, 4, 5],
         updatedAt: Date = .now
     ) -> Set<Date> {
-        let affectedDates = Set((explicitAffectedDates ?? affectedDates(from: events)).map { calendar.startOfDay(for: $0) })
+        let inferredAffectedDates = LocationEventDateResolver(calendar: calendar).affectedDates(from: events)
+        let affectedDates = Set(
+            (explicitAffectedDates ?? inferredAffectedDates).map { calendar.startOfDay(for: $0) }
+        )
         guard !affectedDates.isEmpty else {
             return []
         }
@@ -118,25 +121,24 @@ struct AttendanceInferenceService {
             attendanceDay.officeMinutes = inference.officeMinutes
             attendanceDay.homeMinutes = inference.homeMinutes
 
-            let isCustomExcluded = customExcludedDates.contains(date)
-            if isCustomExcluded {
-                attendanceDay.finalClassificationRaw = AttendanceClassification.nonWorkingDay.rawValue
+            let isProtectedStatus = Self.isProtectedStatus(
+                inference.finalClassification,
+                isCustomExcluded: customExcludedDates.contains(date)
+            )
+            if isProtectedStatus {
+                attendanceDay.finalClassificationRaw = inference.finalClassification.rawValue
             } else if let manualClassification = attendanceDay.manualClassification {
                 attendanceDay.finalClassificationRaw = manualClassification.rawValue
             } else {
                 attendanceDay.finalClassificationRaw = inference.finalClassification.rawValue
             }
 
-            if isCustomExcluded {
-                attendanceDay.complianceTreatmentRaw = ComplianceTreatment.excludedFromRequirement.rawValue
-            } else {
-                let finalClassification = attendanceDay.finalClassification ?? inference.finalClassification
-                attendanceDay.complianceTreatmentRaw = ComplianceTreatmentResolver.resolve(
-                    classification: finalClassification,
-                    officeMinutes: inference.officeMinutes,
-                    minimumOfficeMinutes: minimumOfficeMinutes
-                ).rawValue
-            }
+            let finalClassification = attendanceDay.finalClassification ?? inference.finalClassification
+            attendanceDay.complianceTreatmentRaw = ComplianceTreatmentResolver.resolve(
+                classification: finalClassification,
+                officeMinutes: inference.officeMinutes,
+                minimumOfficeMinutes: minimumOfficeMinutes
+            ).rawValue
             attendanceDay.updatedAt = updatedAt
         }
 
@@ -152,33 +154,15 @@ struct AttendanceInferenceService {
             return [:]
         }
 
-        var activeEntryByPlaceType: [PlaceType: Date] = [:]
         var totalsByDate: [Date: MinuteTotals] = [:]
 
-        for event in events.sorted(by: { $0.occurredAt < $1.occurredAt }) {
-            guard let placeType = event.placeType,
-                  let eventKind = event.eventKind else {
-                continue
-            }
-
-            switch eventKind {
-            case .entered:
-                if activeEntryByPlaceType[placeType] == nil {
-                    activeEntryByPlaceType[placeType] = event.occurredAt
-                }
-            case .exited:
-                guard let enteredAt = activeEntryByPlaceType[placeType], event.occurredAt > enteredAt else {
-                    continue
-                }
-
-                allocateMinutes(
-                    from: max(enteredAt, periodStart),
-                    to: min(event.occurredAt, periodExclusiveEnd),
-                    placeType: placeType,
-                    totalsByDate: &totalsByDate
-                )
-                activeEntryByPlaceType[placeType] = nil
-            }
+        for visit in LocationVisitResolver().visits(from: events) {
+            allocateMinutes(
+                from: max(visit.enteredAt, periodStart),
+                to: min(visit.exitedAt, periodExclusiveEnd),
+                placeType: visit.placeType,
+                totalsByDate: &totalsByDate
+            )
         }
 
         return totalsByDate
@@ -215,44 +199,6 @@ struct AttendanceInferenceService {
         }
     }
 
-    private func affectedDates(from events: [LocationEvent]) -> Set<Date> {
-        var affectedDates = Set(events.map { calendar.startOfDay(for: $0.occurredAt) })
-        var activeEntryByPlaceType: [PlaceType: Date] = [:]
-
-        for event in events.sorted(by: { $0.occurredAt < $1.occurredAt }) {
-            guard let placeType = event.placeType,
-                  let eventKind = event.eventKind else {
-                continue
-            }
-
-            switch eventKind {
-            case .entered:
-                if activeEntryByPlaceType[placeType] == nil {
-                    activeEntryByPlaceType[placeType] = event.occurredAt
-                }
-            case .exited:
-                if let enteredAt = activeEntryByPlaceType[placeType], event.occurredAt > enteredAt {
-                    affectedDates.formUnion(dates(from: enteredAt, through: event.occurredAt))
-                    activeEntryByPlaceType[placeType] = nil
-                }
-            }
-        }
-
-        return affectedDates
-    }
-
-    private func detectedClassification(officeMinutes: Int, homeMinutes: Int) -> AttendanceClassification {
-        if officeMinutes >= minimumOfficeMinutes {
-            return homeMinutes > 0 ? .mixed : .office
-        }
-
-        if homeMinutes > 0 {
-            return .home
-        }
-
-        return .unknown
-    }
-
     private func exclusionClassification(
         for date: Date,
         leaveByDate: [Date: AttendanceClassification],
@@ -260,10 +206,6 @@ struct AttendanceInferenceService {
         customExcludedDates: Set<Date>,
         selectedISOWeekdays: Set<Int>
     ) -> AttendanceClassification? {
-        if customExcludedDates.contains(date) {
-            return .nonWorkingDay
-        }
-
         if publicHolidayDates.contains(date) {
             return .publicHoliday
         }
@@ -272,7 +214,27 @@ struct AttendanceInferenceService {
             return leaveClassification
         }
 
+        if customExcludedDates.contains(date) {
+            return .nonWorkingDay
+        }
+
         return selectedISOWeekdays.contains(isoWeekday(for: date)) ? nil : .nonWorkingDay
+    }
+
+    private static func isProtectedStatus(
+        _ classification: AttendanceClassification,
+        isCustomExcluded: Bool
+    ) -> Bool {
+        if isCustomExcluded {
+            return true
+        }
+
+        switch classification {
+        case .publicHoliday, .annualLeave, .sickLeave:
+            return true
+        default:
+            return false
+        }
     }
 
     private func leaveClassificationByDate(from leaveRecords: [LeaveRecord]) -> [Date: AttendanceClassification] {
@@ -316,6 +278,21 @@ struct AttendanceInferenceService {
     private func isoWeekday(for date: Date) -> Int {
         let weekday = calendar.component(.weekday, from: date)
         return weekday == 1 ? 7 : weekday - 1
+    }
+}
+
+private extension AttendanceInferenceService {
+    func detectedClassification(officeMinutes: Int, homeMinutes: Int) -> AttendanceClassification {
+        if officeMinutes >= minimumOfficeMinutes {
+            return .office
+        }
+        if officeMinutes > 0, homeMinutes > 0 {
+            return .mixed
+        }
+        if homeMinutes > 0 {
+            return .home
+        }
+        return .unknown
     }
 }
 

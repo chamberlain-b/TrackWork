@@ -21,6 +21,14 @@
 		5F8A731A2FF7600000DC4D9E /* CompliancePeriodTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */; };
 		5F8A731B2FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */; };
 		5F8A731C2FF7600000DC4D9E /* CustomExcludedDayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */; };
+		5F8A73302FF7600000DC4D9E /* AppPrivacyLockServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73402FF7600000DC4D9E /* AppPrivacyLockServiceTests.swift */; };
+		5F8A73312FF7600000DC4D9E /* ComplianceRuleResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73412FF7600000DC4D9E /* ComplianceRuleResolverTests.swift */; };
+		5F8A73322FF7600000DC4D9E /* OneShotCheckInServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73422FF7600000DC4D9E /* OneShotCheckInServiceTests.swift */; };
+		5F8A73332FF7600000DC4D9E /* PortableBackupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73432FF7600000DC4D9E /* PortableBackupServiceTests.swift */; };
+		5F8A73342FF7600000DC4D9E /* PortableBackupTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73442FF7600000DC4D9E /* PortableBackupTestSupport.swift */; };
+		5F8A73352FF7600000DC4D9E /* ReviewReminderServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73452FF7600000DC4D9E /* ReviewReminderServiceTests.swift */; };
+		5F8A73362FF7600000DC4D9E /* ReviewDateCalculatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73462FF7600000DC4D9E /* ReviewDateCalculatorTests.swift */; };
+		5F8A73502FF7600000DC4D9E /* AutomatedAttendanceEventProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8A73512FF7600000DC4D9E /* AutomatedAttendanceEventProcessorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +66,14 @@
 		5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplianceTrendCalculatorTests.swift; sourceTree = "<group>"; };
 		5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomExcludedDayTests.swift; sourceTree = "<group>"; };
 		5F8A73212FF7600000DC4D9E /* TrackWorkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrackWorkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5F8A73402FF7600000DC4D9E /* AppPrivacyLockServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPrivacyLockServiceTests.swift; sourceTree = "<group>"; };
+		5F8A73412FF7600000DC4D9E /* ComplianceRuleResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComplianceRuleResolverTests.swift; sourceTree = "<group>"; };
+		5F8A73422FF7600000DC4D9E /* OneShotCheckInServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneShotCheckInServiceTests.swift; sourceTree = "<group>"; };
+		5F8A73432FF7600000DC4D9E /* PortableBackupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortableBackupServiceTests.swift; sourceTree = "<group>"; };
+		5F8A73442FF7600000DC4D9E /* PortableBackupTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortableBackupTestSupport.swift; sourceTree = "<group>"; };
+		5F8A73452FF7600000DC4D9E /* ReviewReminderServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewReminderServiceTests.swift; sourceTree = "<group>"; };
+		5F8A73462FF7600000DC4D9E /* ReviewDateCalculatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewDateCalculatorTests.swift; sourceTree = "<group>"; };
+		5F8A73512FF7600000DC4D9E /* AutomatedAttendanceEventProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomatedAttendanceEventProcessorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -129,6 +145,14 @@
 				5F8A73172FF7600000DC4D9E /* CompliancePeriodTests.swift */,
 				5F8A73182FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift */,
 				5F8A73192FF7600000DC4D9E /* CustomExcludedDayTests.swift */,
+				5F8A73402FF7600000DC4D9E /* AppPrivacyLockServiceTests.swift */,
+				5F8A73412FF7600000DC4D9E /* ComplianceRuleResolverTests.swift */,
+				5F8A73422FF7600000DC4D9E /* OneShotCheckInServiceTests.swift */,
+				5F8A73432FF7600000DC4D9E /* PortableBackupServiceTests.swift */,
+				5F8A73442FF7600000DC4D9E /* PortableBackupTestSupport.swift */,
+				5F8A73452FF7600000DC4D9E /* ReviewReminderServiceTests.swift */,
+				5F8A73462FF7600000DC4D9E /* ReviewDateCalculatorTests.swift */,
+				5F8A73512FF7600000DC4D9E /* AutomatedAttendanceEventProcessorTests.swift */,
 			);
 			path = TrackWorkTests;
 			sourceTree = "<group>";
@@ -270,6 +294,14 @@
 				5F8A731A2FF7600000DC4D9E /* CompliancePeriodTests.swift in Sources */,
 				5F8A731B2FF7600000DC4D9E /* ComplianceTrendCalculatorTests.swift in Sources */,
 				5F8A731C2FF7600000DC4D9E /* CustomExcludedDayTests.swift in Sources */,
+				5F8A73302FF7600000DC4D9E /* AppPrivacyLockServiceTests.swift in Sources */,
+				5F8A73312FF7600000DC4D9E /* ComplianceRuleResolverTests.swift in Sources */,
+				5F8A73322FF7600000DC4D9E /* OneShotCheckInServiceTests.swift in Sources */,
+				5F8A73332FF7600000DC4D9E /* PortableBackupServiceTests.swift in Sources */,
+				5F8A73342FF7600000DC4D9E /* PortableBackupTestSupport.swift in Sources */,
+				5F8A73352FF7600000DC4D9E /* ReviewReminderServiceTests.swift in Sources */,
+				5F8A73362FF7600000DC4D9E /* ReviewDateCalculatorTests.swift in Sources */,
+				5F8A73502FF7600000DC4D9E /* AutomatedAttendanceEventProcessorTests.swift in Sources */,
 				5F8A73062FF7600000DC4D9E /* CSVExportServiceTests.swift in Sources */,
 				5F8A73032FF7600000DC4D9E /* ComplianceCalculatorTests.swift in Sources */,
 				5F8A73012FF7600000DC4D9E /* JurisdictionCatalogTests.swift in Sources */,
@@ -442,9 +474,11 @@
 				DEVELOPMENT_TEAM = M7A22582L2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Track Work";
+				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location only when you choose Use Current Location to set a home or office place.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Work Track uses Face ID or your device passcode to unlock your private attendance data.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses saved home and office boundaries to record private entry and exit events when the app is closed. It does not continuously track your location.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses location when you choose place setup, one-shot Check In, or optional saved-boundary attendance automation.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -482,9 +516,11 @@
 				DEVELOPMENT_TEAM = M7A22582L2;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Track Work";
+				INFOPLIST_KEY_CFBundleDisplayName = "Work Track";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.business";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses your location only when you choose Use Current Location to set a home or office place.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Work Track uses Face ID or your device passcode to unlock your private attendance data.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Work Track uses saved home and office boundaries to record private entry and exit events when the app is closed. It does not continuously track your location.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Work Track uses location when you choose place setup, one-shot Check In, or optional saved-boundary attendance automation.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

@@ -1,7 +1,7 @@
 # Work Track iOS MVP Build and Release Plan
 
 Version: 1.0 release candidate
-Updated: 2026-07-11
+Updated: 2026-07-15
 Platform: Native iOS, SwiftUI
 Minimum deployment: iOS 27.0+
 User-facing app name: **Work Track**
@@ -36,6 +36,8 @@ The dashboard defaults to the current calendar month. The Compliance, Records, a
 7. Custom date range.
 
 All period boundaries are inclusive and normalized to calendar days. If a custom end date precedes its start date, the range is normalized before calculation.
+
+Compliance rules are effective-dated. If a selected range spans a rule change, the whole range uses the saved rule effective on the inclusive range end. Each monthly, quarterly, or yearly trend bucket independently uses the rule effective at that bucket's end.
 
 Do not add open-ended analytics periods to the MVP.
 
@@ -130,41 +132,55 @@ CSV fields must remain safe when opened in spreadsheet software, including neutr
 - Saved place names, formatted addresses, coordinates, and radii remain in the app's on-device SwiftData store.
 - Bundled holiday source URLs are attribution metadata; the MVP does not fetch those URLs.
 - Generated reports leave the app only when the user invokes the system share flow.
+- Standard portable backups exclude saved places, addresses, coordinates, and raw location events. Full private backups include them only after an explicit warning.
+- The optional app lock uses system device-owner authentication and obscures content while inactive.
+- The optional weekly reminder uses privacy-safe local notification copy and requests permission only in context.
 - Settings provides a Privacy & Data screen describing local storage and export behavior.
 - Delete All On-Device Data requires destructive confirmation.
-- Reset deletes user attendance, leave, notes, overrides, rules, custom exclusions, places, stored location events, user-edited holidays, and generated reports, then restores one default compliance rule.
+- Reset deletes user attendance, leave, notes, overrides, rules, plans, custom exclusions, places, stored location events, user-edited holidays, and generated reports; turns off automation and the weekly reminder; then restores one default compliance rule.
 - Reset does not revoke iOS permissions, erase copies previously shared to another destination, or control data retained by device backups.
 
 ### 2.9 Location scope
 
-The MVP supports saving one home and one office place primarily by address search or current location, with map adjustment as a fallback. Coordinates remain stored on-device for location logic but are not exposed as normal user input. Automatic background detection is intentionally unavailable:
+The location milestone supports one home and one office place, one-shot foreground actions, and optional saved-region automation. Coordinates remain stored on-device for saved-place logic but are not exposed as normal user input.
 
 - Do not request location permission on first launch, when opening setup, or when searching for an address.
-- Request When In Use authorization only after the user explicitly chooses Use Current Location and sees an in-app explanation.
-- Use a single current-location request to select the place; do not keep location updates running.
-- Do not request Always authorization in the MVP.
-- Do not enable the Background Modes location capability.
-- Do not start geofence monitoring in the production MVP path.
-- Do not continuously track GPS.
-- Manual attendance remains the supported path when automatic detection is unavailable.
+- Place selection and Check In request one foreground sample only after an explicit action; discard the sample after classification.
+- Automatic Attendance is off by default and can be enabled only from its dedicated explanation screen with an active saved place.
+- Request When In Use first, then request Always separately and only after explaining that iOS needs it to deliver boundary events while the app is closed.
+- Monitor only the configured home and office circular regions. Do not start standard or continuous location updates.
+- Persist saved-place identity, entry/exit kind, and timestamp; do not persist a sampled boundary coordinate or route.
+- Pair entries and exits by the exact monitored-region identifier, even when more than one region has the same place type.
+- Treat a newer entry for the same region as repair for a missed exit, and reject non-positive or longer-than-18-hour visit pairs instead of inferring stale attendance.
+- Reject overlapping active home and office areas rather than guessing a classification.
+- When automation is disabled, permission becomes insufficient, a monitored region is removed or replaced, or monitoring becomes unavailable, write an explicit exit for each open visit before stopping the affected regions.
+- Keep every stored boundary event reviewable in Location Events; clearing raw events must not delete already-derived attendance.
+- Manual corrections, leave, holidays, and custom exclusions remain authoritative over later inferred evidence.
+- Duplicate boundary callbacks must not create duplicate events, and unchanged regions should not be re-registered on launch.
+- Always preserve manual attendance and one-shot Check In as fallbacks when permission is denied or an event is delayed.
+- Continuous GPS tracking remains prohibited.
 
-Location domain and inference foundations may remain in the codebase, but user-facing copy must not promise automatic background tracking.
+Permission requests remain contextual: foreground location is requested only after a one-shot place or Check In action, Always access only from Automatic Attendance, and notification access only after the weekly reminder is enabled. Denial must leave manual attendance and non-location setup paths available.
+
+Unit tests and Simulator runs validate pairing, inference, permissions UI, and failure states, but they cannot certify production geofence delivery. Background and system-terminated delivery, permission changes, and boundary timing still require validation on a physical iPhone before release. A user force-quit is distinct from system termination, is outside the supported terminated-delivery claim, and requires a relaunch before automation is expected to resume.
 
 ## 3. Implemented MVP Baseline
 
 The live implementation includes:
 
-- A SwiftUI tab shell for Dashboard, Records, Calendar, Export, and Settings.
-- SwiftData persistence for attendance, leave, overrides, compliance rules, places, location events, public holidays, and custom excluded days.
+- A five-tab SwiftUI shell for Summary, Calendar, History, Insights, and Settings.
+- SwiftData persistence for attendance, leave, overrides, effective-dated compliance rules, planned office days, places, location events, public holidays, and custom excluded days.
 - Manual day editing, full-day annual/sick leave, notes, overrides, and batch leave entry.
 - The seven deterministic compliance period presets and normalized custom ranges.
 - Monthly, quarterly, and yearly compliance trend calculations.
 - Percentage and fixed-target compliance calculations with exclusion handling.
-- Bundled 2026 holiday data for every supported AU and NZ jurisdiction.
+- Bundled 2026–2027 holiday data for every supported AU and NZ jurisdiction.
 - NZ national-to-regional holiday inheritance and active-jurisdiction filtering.
 - Styled PDF and spreadsheet-safe CSV export.
-- Address-first home and office place setup with explicit, one-shot current-location selection.
-- Privacy explanations and confirmed on-device reset.
+- A focused pending-day review queue, separate office-day planning, searchable/filterable History, and direct compliance Insights.
+- Address-first place setup, explicit one-shot current-location actions, and opt-in automatic geofence attendance.
+- App Shortcuts for recording today and reviewing pending days.
+- Standard/full portable backup and restore, optional app lock, privacy-safe weekly reminders, and confirmed on-device reset.
 - Unit and UI test targets in the shared Xcode scheme.
 - A privacy manifest declaring no tracking or data collection by the developer for the current build.
 
@@ -187,11 +203,13 @@ This baseline must continue to compile and pass tests as release work proceeds.
 
 ### 5.1 Bundled horizon
 
-The release bundle contains verified-exhaustive holiday fixtures for calendar year **2026 only**. Each supported Australian jurisdiction has its own fixture. NZ National has its own fixture, and every supported NZ regional fixture inherits NZ National.
+The release bundle contains verified-exhaustive holiday fixtures for calendar years **2026 and 2027**. Each supported Australian jurisdiction has a fixture for both years. NZ National has fixtures for both years, and every supported NZ regional fixture inherits NZ National.
 
-This is an explicit release horizon, not a promise of perpetual holiday coverage. A period that requires holiday data outside 2026 is not fully supported by the bundled MVP dataset and must never silently imply that there are no holidays.
+This is an explicit release horizon, not a promise of perpetual holiday coverage. A period that requires holiday data outside 2026–2027 is not fully supported by the bundled MVP dataset and must never silently imply that there are no holidays. Calendar, History, and Compliance show the unsupported years, while Export remains unavailable for an unsupported range.
 
-Before shipping a build intended for use beyond 2026, add and verify the next required year for every supported jurisdiction, extend tests, and update user-facing release notes.
+Victoria's bundled 24 September 2027 Friday before the AFL Grand Final date follows the official Victorian Department of Education calendar. Business Victoria marks it subject to the final 2027 AFL schedule, so it must be rechecked before submission.
+
+Before shipping a build intended for use beyond 2027, add and verify the next required year for every supported jurisdiction, extend tests, and update user-facing release notes.
 
 ### 5.2 Fixture validation
 
@@ -209,7 +227,7 @@ The local provider must return typed errors for missing files, unsupported juris
 
 ### 5.3 Persistence
 
-Bundled holidays are synchronized into local storage for the active country, jurisdiction, and current year. Stable IDs make synchronization repeatable. A user-edited holiday is preserved instead of overwritten by a later local sync.
+Bundled holidays are synchronized into local storage for the active country, jurisdiction, and every bundled year. Stable IDs make synchronization repeatable. A user-edited holiday is preserved instead of overwritten by a later local sync.
 
 There is no remote holiday refresh in MVP.
 
@@ -277,10 +295,12 @@ Before declaring the MVP ready:
 4. Run static analysis.
 5. Complete `docs/QA_MVP_Checklist.md` on a clean install.
 6. Inspect generated PDF and CSV files for content, formatting, and privacy.
-7. Verify every supported 2026 holiday fixture loads and includes source metadata.
-8. Confirm missing-year holiday data produces a visible error rather than a zero-holiday assumption.
-9. Confirm the privacy manifest and App Store privacy answers match the release binary.
-10. Recheck signing, bundle ID, app category, version/build, icon, screenshots, and hosted support/privacy URLs.
+7. Verify every supported 2026 and 2027 holiday fixture loads and includes source metadata.
+8. Confirm unsupported holiday years produce visible warnings or a current-year alert and prevent export rather than implying a zero-holiday year.
+9. Recheck Victoria's conditional 24 September 2027 AFL holiday against the final published schedule.
+10. Complete background and system-terminated geofence delivery checks on a physical iPhone; Simulator results are not sufficient for this gate.
+11. Confirm the privacy manifest and App Store privacy answers match the release binary.
+12. Recheck signing, bundle ID, app category, version/build, icon, screenshots, and hosted support/privacy URLs.
 
 Record the simulator/device, OS version, test result bundle, screenshots, and any unverified risk in the release handoff.
 
@@ -316,18 +336,15 @@ These are release blockers for submission but are not code defects.
 
 ## 11. Post-MVP Backlog
 
-Keep these outside the current MVP unless explicitly reopened:
+Keep these outside the current release unless explicitly reopened:
 
-- Holiday datasets beyond the currently verified 2026 horizon.
+- Holiday datasets beyond the currently verified 2027 horizon.
 - Remote holiday update/import service.
 - Half-day leave and custom leave hours.
 - Native `.xlsx` workbook output.
-- Automatic background location detection, geofencing, or Always permission.
 - Continuous GPS tracking, which remains prohibited.
 - iCloud or other app-managed sync.
-- Backup-file import/export.
-- App lock or Face ID.
-- Widgets, Watch app, Siri Shortcuts, and calendar integration.
+- Widgets, Watch app, and calendar integration.
 - Multiple office locations.
 - Employer badge/report reconciliation.
 - Additional open-ended analytics period types.

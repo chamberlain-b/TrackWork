@@ -4,6 +4,11 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
+    @State private var editingRule: ComplianceRule?
+    @State private var saveError: String?
+
+    private let ruleResolver = ComplianceRuleResolver()
+    private let calendar = Calendar.autoupdatingCurrent
 
     private let workdays = [
         SettingsWorkday(id: 1, name: "Monday"),
@@ -16,7 +21,7 @@ struct SettingsView: View {
     ]
 
     private var activeRule: ComplianceRule? {
-        complianceRules.first
+        editingRule ?? ruleResolver.currentRule(from: complianceRules)
     }
 
     private var selectedCountry: Country {
@@ -105,22 +110,36 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                SettingsLocationSection()
-                SettingsRegionSection(
-                    availableJurisdictions: availableJurisdictions,
-                    country: countrySelection,
-                    jurisdictionId: jurisdictionSelection
-                )
                 SettingsComplianceRuleSection(
                     requirementType: requirementTypeSelection,
                     fixedRequiredDays: fixedRequiredDaysBinding,
                     requiredPercentageInput: requiredPercentageInputBinding,
                     prorateFixedTarget: prorateFixedTargetBinding
                 )
-                SettingsOfficeDaySection(minimumOfficeMinutes: minimumOfficeMinutesBinding)
-                SettingsWorkdaysSection(workdays: workdaySelections)
+                SettingsWorkScheduleSection(
+                    minimumOfficeMinutes: minimumOfficeMinutesBinding,
+                    workdays: workdaySelections
+                )
+                SettingsRegionSection(
+                    availableJurisdictions: availableJurisdictions,
+                    country: countrySelection,
+                    jurisdictionId: jurisdictionSelection
+                )
+                SettingsLocationSection()
+                SettingsReviewReminderSection()
+                SettingsHolidayCoverageSection()
                 SettingsPrivacyDataSection()
+
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.ds.critical)
+                            .accessibilityIdentifier("settings.saveError")
+                    }
+                }
             }
+            .scrollContentBackground(.hidden)
+            .appScreenBackground()
             .navigationTitle("Settings")
             .task {
                 ensureDefaultRuleExists()
@@ -220,12 +239,25 @@ struct SettingsView: View {
     }
 
     private func ruleForEditing() -> ComplianceRule {
-        if let activeRule {
-            return activeRule
+        if let editingRule {
+            return editingRule
         }
 
-        let rule = ComplianceRule()
+        if let existingRule = ruleResolver.ruleEffectiveInMonth(
+            containing: .now,
+            from: complianceRules,
+            calendar: calendar
+        ) {
+            editingRule = existingRule
+            return existingRule
+        }
+
+        let monthStart = calendar.dateInterval(of: .month, for: .now)?.start
+            ?? calendar.startOfDay(for: .now)
+        let baseRule = activeRule ?? ComplianceRule()
+        let rule = ruleResolver.copy(baseRule, effectiveFrom: monthStart)
         modelContext.insert(rule)
+        editingRule = rule
         return rule
     }
 
@@ -241,8 +273,16 @@ struct SettingsView: View {
 
     private func persist(_ rule: ComplianceRule) {
         rule.updatedAt = .now
-        try? modelContext.save()
+        do {
+            try modelContext.save()
+            saveError = nil
+        } catch {
+            modelContext.rollback()
+            editingRule = nil
+            saveError = "Your settings could not be saved. Review the values and try again."
+        }
     }
+
 }
 
 #Preview {

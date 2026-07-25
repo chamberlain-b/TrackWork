@@ -24,16 +24,19 @@ struct DashboardRuleAdapter {
         switch rule.requirementType ?? .fixedMonthlyDays {
         case .fixedMonthlyDays:
             if rule.prorateFixedTargetForLeave {
-                return "Your fixed target of \(rule.fixedRequiredDays ?? 0) days is prorated "
-                    + "using \(summary.adjustedEligibleDays) of \(summary.baseEligibleDays) eligible workdays."
+                if summary.adjustedEligibleDays < summary.baseEligibleDays {
+                    return "Starts at \(rule.fixedRequiredDays ?? 0) office days "
+                        + "and adjusts when eligible workdays are reduced."
+                }
+
+                return "Fixed at \(rule.fixedRequiredDays ?? 0) office days for the month."
             }
 
-            return "Your fixed target is not adjusted when leave reduces the number of eligible workdays."
+            return "Fixed at \(rule.fixedRequiredDays ?? 0) office days. Leave does not change it."
         case .percentageOfEligibleDays:
             let percentage = rule.requiredPercentage ?? 0
             let formattedPercentage = percentage.formatted(.percent.precision(.fractionLength(0...1)))
-            return "Your target is \(formattedPercentage) of \(summary.adjustedEligibleDays) eligible workdays "
-                + "after holidays and leave."
+            return "\(formattedPercentage) of eligible workdays, rounded up to a whole day."
         }
     }
 }

@@ -12,19 +12,38 @@ struct RecordsView: View {
     @State private var selectedFilter: CompliancePeriodPreset = .currentMonth
     @State private var customRangeStart: Date = .now
     @State private var customRangeEnd: Date = .now
+    @State private var recordFilter: RecordFilter = .all
+    @State private var searchText = ""
+
+    private let onOpenCalendar: (() -> Void)?
 
     private let calendar = Calendar.recordsCalendar
+    private let ruleResolver = ComplianceRuleResolver()
 
-    private var filteredRecords: [RecordRow] {
-        let range = selectedFilter.dateRange(
+    init(onOpenCalendar: (() -> Void)? = nil) {
+        self.onOpenCalendar = onOpenCalendar
+    }
+
+    private var selectedRange: ComplianceDateRange {
+        selectedFilter.dateRange(
             calendar: calendar,
             now: .now,
             customStart: customRangeStart,
             customEnd: customRangeEnd
         )
+    }
+
+    private var holidayCoverageWarning: String? {
+        HolidayCoverage.validation(for: selectedRange, calendar: calendar).userFacingMessage
+    }
+
+    private var periodRecords: [RecordRow] {
         let attendanceByDate = Dictionary(grouping: attendanceDays) { calendar.startOfDay(for: $0.date) }
         let leaveByDate = Dictionary(grouping: leaveRecords) { calendar.startOfDay(for: $0.date) }
-        let activeJurisdictionId = complianceRules.first?.jurisdictionId ?? "AU-VIC"
+        let activeJurisdictionId = ruleResolver.rule(
+            for: selectedRange.end,
+            from: complianceRules
+        )?.jurisdictionId ?? "AU-VIC"
         let applicableHolidays = publicHolidays.filter { holiday in
             holiday.jurisdictionId == activeJurisdictionId
         }
@@ -40,7 +59,7 @@ struct RecordsView: View {
 
         return allDates
             .filter { date in
-                range.contains(date, calendar: calendar)
+                selectedRange.contains(date, calendar: calendar)
             }
             .sorted(by: >)
             .map { date in
@@ -61,6 +80,13 @@ struct RecordsView: View {
             }
     }
 
+    private var filteredRecords: [RecordRow] {
+        periodRecords.filter { record in
+            recordFilter.includes(record)
+                && (searchText.isEmpty || record.matches(searchText))
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -71,29 +97,93 @@ struct RecordsView: View {
                         customEnd: $customRangeEnd,
                         accessibilityPrefix: "records"
                     )
+
+                    Picker("Show", selection: $recordFilter) {
+                        ForEach(RecordFilter.allCases) { filter in
+                            Text(filter.displayName).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("records.statusFilter")
+
+                    if let holidayCoverageWarning {
+                        Label {
+                            Text(holidayCoverageWarning)
+                                .font(AppTypography.caption)
+                                .foregroundStyle(Color.ds.textSecondary)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Color.ds.warning)
+                        }
+                        .accessibilityIdentifier("records.holidayCoverageWarning")
+                    }
                 }
 
                 Section {
                     if filteredRecords.isEmpty {
-                        DSEmptyState(
-                            systemImage: "tray",
-                            title: "No records",
-                            message: "Attendance, leave, overrides, holidays, and custom exclusions for this range will appear here."
-                        )
+                        VStack(spacing: AppSpacing.md) {
+                            DSEmptyState(
+                                systemImage: "tray",
+                                title: searchText.isEmpty ? "No records" : "No matching records",
+                                message: searchText.isEmpty
+                                    ? "Saved attendance, leave and excluded days appear here."
+                                    : "Change the search or filter."
+                            )
+
+                            if searchText.isEmpty {
+                                calendarAction
+                            }
+                        }
                         .listRowBackground(Color.clear)
                     } else {
                         ForEach(filteredRecords) { record in
-                            RecordRowView(record: record)
+                            NavigationLink {
+                                DayDetailView(
+                                    date: record.date,
+                                    attendanceDay: record.attendanceDay,
+                                    leaveRecord: record.leaveRecord,
+                                    publicHoliday: record.publicHoliday,
+                                    customExcludedDay: record.customExcludedDay
+                                )
+                            } label: {
+                                RecordRowView(record: record)
+                            }
                         }
                     }
-                } header: {
-                    Text("Records")
                 }
             }
             .scrollContentBackground(.hidden)
             .appScreenBackground()
             .navigationTitle("History")
             .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $searchText, prompt: "Status, note, or date")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        ExportView(usesNavigationStack: false)
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityIdentifier("history.export")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var calendarAction: some View {
+        if let onOpenCalendar {
+            Button("Open Calendar", systemImage: "calendar", action: onOpenCalendar)
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("records.openCalendar")
+        } else {
+            NavigationLink {
+                MonthCalendarView()
+            } label: {
+                Label("Open Calendar", systemImage: "calendar")
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("records.openCalendar")
         }
     }
 }
@@ -147,6 +237,55 @@ private struct RecordRow: Identifiable {
     var note: String? {
         leaveRecord?.note ?? customExcludedDay?.reason ?? manualAdjustment?.note ?? attendanceDay?.note
     }
+
+    func matches(_ query: String) -> Bool {
+        let normalizedQuery = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let values = [
+            date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()),
+            primaryStatus,
+            detectedStatus,
+            note ?? ""
+        ]
+        return values.contains { value in
+            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .contains(normalizedQuery)
+        }
+    }
+}
+
+private enum RecordFilter: String, CaseIterable, Identifiable {
+    case all
+    case attendance
+    case leave
+    case adjusted
+    case excluded
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .all: "All"
+        case .attendance: "Attendance"
+        case .leave: "Leave"
+        case .adjusted: "Overrides"
+        case .excluded: "Excluded"
+        }
+    }
+
+    func includes(_ record: RecordRow) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .attendance:
+            record.attendanceDay != nil && record.leaveRecord == nil && record.customExcludedDay == nil
+        case .leave:
+            record.leaveRecord != nil
+        case .adjusted:
+            record.manualAdjustment != nil
+        case .excluded:
+            record.publicHoliday != nil || record.customExcludedDay != nil
+        }
+    }
 }
 
 private struct RecordRowView: View {
@@ -155,15 +294,9 @@ private struct RecordRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(record.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
-                        .font(AppTypography.callout.weight(.semibold))
-                        .foregroundStyle(Color.ds.textPrimary)
-
-                    Text("Detected: \(record.detectedStatus)")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textSecondary)
-                }
+                Text(record.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
+                    .font(AppTypography.callout.weight(.semibold))
+                    .foregroundStyle(Color.ds.textPrimary)
 
                 Spacer(minLength: AppSpacing.sm)
 
@@ -174,22 +307,8 @@ private struct RecordRowView: View {
                 )
             }
 
-            HStack(spacing: AppSpacing.xs) {
-                if record.manualAdjustment != nil {
-                    DSStatusPill(text: "Override", systemImage: "pencil", style: .warning)
-                }
-
-                if record.leaveRecord != nil {
-                    DSStatusPill(text: "Leave", systemImage: "sun.max", style: .info)
-                }
-
-                if record.publicHoliday != nil {
-                    DSStatusPill(text: "Public holiday", systemImage: "sparkles", style: .neutral)
-                }
-
-                if record.customExcludedDay != nil {
-                    DSStatusPill(text: "Custom exclusion", systemImage: "calendar.badge.minus", style: .neutral)
-                }
+            if record.manualAdjustment != nil {
+                DSStatusPill(text: "Override", systemImage: "pencil", style: .warning)
             }
 
             if let note = record.note, !note.isEmpty {

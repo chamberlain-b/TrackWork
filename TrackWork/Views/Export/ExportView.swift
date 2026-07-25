@@ -23,13 +23,14 @@ struct ExportView: View {
     private let csvExportService = CSVExportService()
     private let pdfExportService = PDFExportService()
     private let generatedExportStore = GeneratedExportStore()
+    private let ruleResolver = ComplianceRuleResolver()
 
     init(usesNavigationStack: Bool = true) {
         self.usesNavigationStack = usesNavigationStack
     }
 
     private var activeRule: ComplianceRule {
-        complianceRules.first ?? ComplianceRule()
+        ruleResolver.rule(for: selectedRange.end, from: complianceRules) ?? ComplianceRule()
     }
 
     private var selectedRange: ComplianceDateRange {
@@ -45,6 +46,16 @@ struct ExportView: View {
         let start = selectedRange.start.formatted(.dateTime.day().month(.abbreviated).year())
         let end = selectedRange.end.formatted(.dateTime.day().month(.abbreviated).year())
         return start == end ? start : "\(start) – \(end)"
+    }
+
+    private var holidayCoverageWarning: String? {
+        HolidayCoverage.validation(for: selectedRange, calendar: calendar).userFacingMessage
+    }
+
+    private var holidayCoverageExportError: String? {
+        holidayCoverageWarning.map { warning in
+            "\(warning) Export is unavailable until the selected range has bundled holiday coverage."
+        }
     }
 
     private var generatedFileName: String? {
@@ -68,15 +79,13 @@ struct ExportView: View {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 DSInsightCallout(
                     icon: "doc.richtext",
-                    message: "Exports include an inclusive period summary, daily records, leave, custom exclusions, "
-                        + "manual overrides, active-jurisdiction public holidays, and settings without raw location "
-                        + "events or GPS coordinates.",
+                    message: "PDF and CSV include day-level records. Raw locations are excluded.",
                     highlightedText: selectedRangeTitle
                 )
 
                 DSCard {
                     VStack(alignment: .leading, spacing: AppSpacing.md) {
-                        Text("Report options")
+                        Text("Report")
                             .font(AppTypography.cardTitle)
                             .foregroundStyle(Color.ds.textPrimary)
 
@@ -92,12 +101,19 @@ struct ExportView: View {
                             .foregroundStyle(Color.ds.textSecondary)
                             .accessibilityIdentifier("export.periodRange")
 
-                        Label("Using \(activeRule.name)", systemImage: "checkmark.seal")
-                            .font(AppTypography.caption)
-                            .foregroundStyle(Color.ds.textSecondary)
-                            .accessibilityIdentifier("export.savedRule")
+                        if let holidayCoverageWarning {
+                            Label {
+                                Text(holidayCoverageWarning)
+                                    .font(AppTypography.caption)
+                                    .foregroundStyle(Color.ds.textSecondary)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(Color.ds.warning)
+                            }
+                            .accessibilityIdentifier("export.holidayCoverageWarning")
+                        }
 
-                        Toggle("Include notes in export", isOn: $includeNotes)
+                        Toggle("Include notes", isOn: $includeNotes)
                             .tint(Color.ds.accentPrimary)
                             .accessibilityIdentifier("export.includeNotes")
 
@@ -113,12 +129,6 @@ struct ExportView: View {
                             }
                         }
 
-                        Text(
-                            "Generated report files are temporary and are removed when you leave this screen. "
-                                + "Copies you share are controlled by the destination you choose."
-                        )
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textSecondary)
                     }
                 }
                 .accessibilityIdentifier("export.reportOptions")
@@ -182,19 +192,21 @@ struct ExportView: View {
 
     private var generatePDFButton: some View {
         DSButton(
-            title: "Generate PDF",
+            title: "Create PDF",
             systemImage: "doc.badge.plus",
             action: generatePDF
         )
+        .disabled(holidayCoverageExportError != nil)
         .accessibilityIdentifier("export.generatePDF")
     }
 
     private var generateCSVButton: some View {
         DSButton(
-            title: "Generate CSV",
+            title: "Create CSV",
             systemImage: "tablecells.badge.ellipsis",
             action: generateCSV
         )
+        .disabled(holidayCoverageExportError != nil)
         .accessibilityIdentifier("export.generateCSV")
     }
 
@@ -218,6 +230,11 @@ struct ExportView: View {
 
     private func generateExport(kind: ExportKind, writeFile: (ReportSnapshot) throws -> URL) {
         clearGeneratedFile()
+
+        if let holidayCoverageExportError {
+            generationError = holidayCoverageExportError
+            return
+        }
 
         do {
             let snapshot = try makeSnapshot()

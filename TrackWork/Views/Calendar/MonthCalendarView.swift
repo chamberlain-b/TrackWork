@@ -10,13 +10,15 @@ struct MonthCalendarView: View {
     @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
     @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
+    @Query(sort: \PlannedOfficeDay.date) private var plannedOfficeDays: [PlannedOfficeDay]
 
     @State private var displayedMonth: Date
     @State private var isShowingBatchLeave = false
-    @State private var isCalendarKeyExpanded = false
+    @State private var isShowingLegend = false
 
     private let referenceDate: Date
     private let calendar = Calendar.workTrackCalendar
+    private let ruleResolver = ComplianceRuleResolver()
     private let columns = Array(repeating: GridItem(.flexible(), spacing: AppSpacing.xxs), count: 7)
 
     init(referenceDate: Date = .now) {
@@ -32,8 +34,21 @@ struct MonthCalendarView: View {
         monthStart.formatted(.dateTime.month(.wide).year())
     }
 
+    private var holidayCoverageWarning: String? {
+        HolidayCoverage.validation(
+            from: monthStart,
+            through: calendar.complianceMonthEnd(for: monthStart),
+            calendar: calendar
+        ).userFacingMessage
+    }
+
     private var selectedISOWeekdays: Set<Int> {
-        Set(complianceRules.first?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
+        Set(activeRule.selectedISOWeekdays)
+    }
+
+    private var activeRule: ComplianceRule {
+        let monthEnd = calendar.complianceMonthEnd(for: monthStart)
+        return ruleResolver.rule(for: monthEnd, from: complianceRules) ?? ComplianceRule()
     }
 
     private var isShowingCurrentMonth: Bool {
@@ -54,7 +69,10 @@ struct MonthCalendarView: View {
         let exclusionsByDay = Dictionary(grouping: customExcludedDays) {
             calendar.startOfDay(for: $0.date)
         }
-        let activeJurisdictionID = complianceRules.first?.jurisdictionId ?? "AU-VIC"
+        let plansByDay = Dictionary(grouping: plannedOfficeDays) {
+            calendar.startOfDay(for: $0.date)
+        }
+        let activeJurisdictionID = activeRule.jurisdictionId
         let holidaysByDay = Dictionary(
             grouping: ActiveJurisdictionHolidayResolver.holidays(
                 from: publicHolidays,
@@ -75,7 +93,8 @@ struct MonthCalendarView: View {
                 attendanceDay: attendanceByDay[date]?.first,
                 leaveRecord: leaveByDay[date]?.first,
                 publicHoliday: holidaysByDay[date]?.first,
-                customExcludedDay: exclusionsByDay[date]?.first
+                customExcludedDay: exclusionsByDay[date]?.first,
+                plannedOfficeDay: plansByDay[date]?.first
             )
         }
         let trailingBlanks = (0..<trailingBlankCount).map { index in
@@ -91,13 +110,21 @@ struct MonthCalendarView: View {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     monthHeader
 
+                    if let holidayCoverageWarning {
+                        DSInsightCallout(
+                            icon: "exclamationmark.triangle.fill",
+                            message: holidayCoverageWarning,
+                            highlightedText: "Holiday data unavailable"
+                        )
+                        .accessibilityIdentifier("calendar.holidayCoverageWarning")
+                    }
+
                     if dynamicTypeSize.isAccessibilitySize {
                         agenda
                     } else {
                         calendarSurface
                     }
 
-                    calendarKey
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
                 .padding(.vertical, AppSpacing.lg)
@@ -106,17 +133,32 @@ struct MonthCalendarView: View {
             .navigationTitle("Calendar")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        isShowingBatchLeave = true
-                    } label: {
-                        Label("Add leave for a date range", systemImage: "calendar.badge.plus")
-                    }
-                    .accessibilityHint("Opens batch leave entry for this month")
-                }
+                CalendarPrimaryToolbar(
+                    displayedMonth: monthStart,
+                    isShowingBatchLeave: $isShowingBatchLeave,
+                    isShowingLegend: $isShowingLegend
+                )
             }
             .sheet(isPresented: $isShowingBatchLeave) {
                 BatchLeaveView(displayedMonth: monthStart)
+            }
+            .sheet(isPresented: $isShowingLegend) {
+                NavigationStack {
+                    ScrollView {
+                        CalendarLegendGrid()
+                            .padding(AppSpacing.lg)
+                    }
+                    .navigationTitle("Legend")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                isShowingLegend = false
+                            }
+                        }
+                    }
+                }
+                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -145,28 +187,30 @@ struct MonthCalendarView: View {
     }
 
     private var monthControls: some View {
-        HStack(spacing: AppSpacing.xs) {
-            monthButton(
-                systemImage: "chevron.left",
-                label: "Previous month",
-                action: { moveMonth(by: -1) }
-            )
+        GlassEffectContainer(spacing: AppSpacing.xs) {
+            HStack(spacing: AppSpacing.xs) {
+                monthButton(
+                    systemImage: "chevron.left",
+                    label: "Previous month",
+                    action: { moveMonth(by: -1) }
+                )
 
-            if !isShowingCurrentMonth {
-                Button("Today") {
-                    showCurrentMonth()
+                if !isShowingCurrentMonth {
+                    Button("Today") {
+                        showCurrentMonth()
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+                    .accessibilityLabel("Show current month")
+                    .accessibilityIdentifier("calendar.today")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityLabel("Show current month")
-                .accessibilityIdentifier("calendar.today")
-            }
 
-            monthButton(
-                systemImage: "chevron.right",
-                label: "Next month",
-                action: { moveMonth(by: 1) }
-            )
+                monthButton(
+                    systemImage: "chevron.right",
+                    label: "Next month",
+                    action: { moveMonth(by: 1) }
+                )
+            }
         }
     }
 
@@ -175,7 +219,7 @@ struct MonthCalendarView: View {
             Image(systemName: systemImage)
                 .frame(width: 30, height: 30)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.glass)
         .controlSize(.small)
         .accessibilityLabel(label)
     }
@@ -187,14 +231,7 @@ struct MonthCalendarView: View {
         }
         .padding(AppSpacing.sm)
         .frame(maxWidth: 620)
-        .background(
-            Color.ds.surfacePrimary.opacity(0.72),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .stroke(Color.ds.borderSubtle.opacity(0.72), lineWidth: 1)
-        }
+        .cardSurface(includesShadow: false)
         .frame(maxWidth: .infinity)
         .id(monthStart)
         .transition(.opacity)
@@ -224,6 +261,7 @@ struct MonthCalendarView: View {
                             leaveRecord: day.leaveRecord,
                             publicHoliday: day.publicHoliday,
                             customExcludedDay: day.customExcludedDay,
+                            plannedOfficeDay: day.plannedOfficeDay,
                             selectedISOWeekdays: selectedISOWeekdays,
                             calendar: calendar,
                             referenceDate: referenceDate
@@ -249,6 +287,7 @@ struct MonthCalendarView: View {
                             leaveRecord: day.leaveRecord,
                             publicHoliday: day.publicHoliday,
                             customExcludedDay: day.customExcludedDay,
+                            plannedOfficeDay: day.plannedOfficeDay,
                             selectedISOWeekdays: selectedISOWeekdays,
                             calendar: calendar,
                             referenceDate: referenceDate
@@ -258,49 +297,9 @@ struct MonthCalendarView: View {
             }
         }
         .padding(AppSpacing.xs)
-        .background(
-            Color.ds.surfacePrimary.opacity(0.72),
-            in: RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .stroke(Color.ds.borderSubtle.opacity(0.72), lineWidth: 1)
-        }
+        .cardSurface(includesShadow: false)
         .id(monthStart)
         .transition(.opacity)
-    }
-
-    private var calendarKey: some View {
-        DisclosureGroup(isExpanded: $isCalendarKeyExpanded) {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 132), spacing: AppSpacing.xs)],
-                spacing: AppSpacing.xs
-            ) {
-                LegendPill(text: "Office", token: "O", color: Color.ds.officeDay)
-                LegendPill(text: "Home", token: "H", color: Color.ds.homeDay)
-                LegendPill(text: "Mixed", token: "M", color: Color.ds.info)
-                LegendPill(text: "Annual leave", token: "AL", color: Color.ds.leaveDay)
-                LegendPill(text: "Sick leave", token: "SL", color: Color.ds.leaveDay)
-                LegendPill(text: "Holiday", token: "PH", color: Color.ds.publicHoliday)
-                LegendPill(text: "Excluded", token: "EX", color: Color.ds.textSecondary)
-                LegendPill(text: "Review", token: "!", color: Color.ds.warning)
-            }
-            .padding(.top, AppSpacing.sm)
-        } label: {
-            Label("Calendar key", systemImage: "info.circle")
-                .font(AppTypography.headline)
-                .foregroundStyle(Color.ds.textPrimary)
-        }
-        .padding(AppSpacing.md)
-        .background(
-            Color.ds.surfacePrimary.opacity(0.72),
-            in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
-                .stroke(Color.ds.borderSubtle.opacity(0.64), lineWidth: 1)
-        }
-        .accessibilityIdentifier("calendar.key")
     }
 
     private func dayLink<Label: View>(
@@ -329,7 +328,8 @@ struct MonthCalendarView: View {
             attendanceDay: nil,
             leaveRecord: nil,
             publicHoliday: nil,
-            customExcludedDay: nil
+            customExcludedDay: nil,
+            plannedOfficeDay: nil
         )
     }
 

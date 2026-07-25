@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0",
+  "countryCode": "NZ",
+  "jurisdictionCode": "NZ-WESTLAND",
+  "year": 2027,
+  "sourceName": "New Zealand Government regional anniversary dates",
+  "sourceURL": "https://www.govt.nz/browse/work/public-holidays-and-work/public-holidays-and-anniversary-dates/",
+  "verifiedExhaustive": true,
+  "inheritsFrom": ["NZ-NATIONAL"],
+  "holidays": [
+    { "date": "2027-11-29", "name": "Westland Anniversary Day", "notes": "Observed date." }
+  ]
+}

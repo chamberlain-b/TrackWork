@@ -71,7 +71,7 @@ struct DayDetailHeaderCard: View {
 
                 if isUpcoming {
                     Label(
-                        "Attendance can be confirmed on or after this date.",
+                        "Confirm attendance on or after this date.",
                         systemImage: "calendar.badge.clock"
                     )
                     .font(AppTypography.callout)
@@ -259,7 +259,7 @@ struct DayDetailHolidayCard: View {
 
                 if let sourceURL {
                     Link(destination: sourceURL) {
-                        Label("View official source", systemImage: "arrow.up.right.square")
+                        Label("Official source", systemImage: "arrow.up.right.square")
                             .font(AppTypography.callout.weight(.semibold))
                     }
                     .accessibilityIdentifier("dayDetail.publicHolidaySource")
@@ -302,7 +302,7 @@ struct DayDetailCustomExclusionCard: View {
                         .foregroundStyle(Color.ds.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("Use this for a one-off day that should not count toward the selected period.")
+                    Text("Remove this day from the office target.")
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -363,7 +363,7 @@ struct DayDetailNoteCard: View {
                     .accessibilityLabel("Attendance note")
                     .accessibilityIdentifier("dayDetail.note")
 
-                Text("Notes are explanatory only unless saved with a manual status or leave status.")
+                Text("Notes do not change attendance status.")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
             }

@@ -50,7 +50,7 @@ final class CalendarDayPresentationTests: XCTestCase {
         )
 
         assertKind(presentation, is: .review)
-        XCTAssertEqual(presentation.token, "!")
+        XCTAssertEqual(presentation.systemImage, "exclamationmark")
         XCTAssertEqual(presentation.label, "Needs review")
     }
 
@@ -60,7 +60,7 @@ final class CalendarDayPresentationTests: XCTestCase {
         )
 
         assertKind(presentation, is: .notRequired)
-        XCTAssertNil(presentation.token)
+        XCTAssertNil(presentation.systemImage)
         XCTAssertEqual(presentation.label, "Not a scheduled workday")
     }
 
@@ -87,7 +87,7 @@ final class CalendarDayPresentationTests: XCTestCase {
         )
 
         assertKind(presentation, is: .publicHoliday)
-        XCTAssertEqual(presentation.token, "PH")
+        XCTAssertEqual(presentation.systemImage, "sparkles")
         XCTAssertEqual(presentation.label, "Public holiday, Test Holiday")
     }
 
@@ -106,7 +106,7 @@ final class CalendarDayPresentationTests: XCTestCase {
         )
 
         assertKind(presentation, is: .annualLeave)
-        XCTAssertEqual(presentation.token, "AL")
+        XCTAssertEqual(presentation.systemImage, "sun.max.fill")
         XCTAssertEqual(presentation.label, LeaveType.annualLeave.displayName)
     }
 
@@ -124,8 +124,37 @@ final class CalendarDayPresentationTests: XCTestCase {
         )
 
         assertKind(presentation, is: .excluded)
-        XCTAssertEqual(presentation.token, "EX")
+        XCTAssertEqual(presentation.systemImage, "calendar.badge.minus")
         XCTAssertEqual(presentation.label, "Custom exclusion")
+    }
+
+    func testPlannedOfficeDayIsVisibleBeforeAttendanceIsConfirmed() {
+        let subjectDate = date(year: 2026, month: 7, day: 20)
+        let presentation = makePresentation(
+            date: subjectDate,
+            plannedOfficeDay: PlannedOfficeDay(date: subjectDate)
+        )
+
+        assertKind(presentation, is: .planned)
+        XCTAssertEqual(presentation.systemImage, "calendar.badge.clock")
+        XCTAssertEqual(presentation.label, "Planned office day")
+    }
+
+    func testConfirmedAttendanceTakesPrecedenceOverPlan() {
+        let subjectDate = date(year: 2026, month: 7, day: 14)
+        let presentation = makePresentation(
+            date: subjectDate,
+            attendanceDay: AttendanceDay(
+                date: subjectDate,
+                detectedClassification: .office,
+                finalClassification: .office,
+                complianceTreatment: .countsAsOffice
+            ),
+            plannedOfficeDay: PlannedOfficeDay(date: subjectDate)
+        )
+
+        assertKind(presentation, is: .office)
+        XCTAssertEqual(presentation.label, AttendanceClassification.office.displayName)
     }
 
     private func makePresentation(
@@ -133,7 +162,8 @@ final class CalendarDayPresentationTests: XCTestCase {
         attendanceDay: AttendanceDay? = nil,
         leaveRecord: LeaveRecord? = nil,
         publicHoliday: PublicHoliday? = nil,
-        customExcludedDay: CustomExcludedDay? = nil
+        customExcludedDay: CustomExcludedDay? = nil,
+        plannedOfficeDay: PlannedOfficeDay? = nil
     ) -> CalendarDayPresentation {
         CalendarDayPresentation(
             date: date,
@@ -141,6 +171,7 @@ final class CalendarDayPresentationTests: XCTestCase {
             leaveRecord: leaveRecord,
             publicHoliday: publicHoliday,
             customExcludedDay: customExcludedDay,
+            plannedOfficeDay: plannedOfficeDay,
             selectedISOWeekdays: [1, 2, 3, 4, 5],
             calendar: calendar,
             referenceDate: referenceDate
@@ -175,6 +206,7 @@ final class CalendarDayPresentationTests: XCTestCase {
              (.sickLeave, .sickLeave),
              (.publicHoliday, .publicHoliday),
              (.excluded, .excluded),
+             (.planned, .planned),
              (.review, .review),
              (.notRequired, .notRequired),
              (.upcoming, .upcoming):

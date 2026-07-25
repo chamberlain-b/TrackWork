@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "countryCode": "AU",
+  "jurisdictionCode": "AU-TAS",
+  "year": 2027,
+  "sourceName": "WorkSafe Tasmania public holidays",
+  "sourceURL": "https://worksafe.tas.gov.au/topics/laws-and-compliance/public-holidays",
+  "verifiedExhaustive": true,
+  "holidays": [
+    { "date": "2027-01-01", "name": "New Year's Day" },
+    { "date": "2027-01-26", "name": "Australia Day" },
+    { "date": "2027-03-08", "name": "Eight Hours Day" },
+    { "date": "2027-03-26", "name": "Good Friday" },
+    { "date": "2027-03-29", "name": "Easter Monday" },
+    { "date": "2027-04-25", "name": "Anzac Day" },
+    { "date": "2027-06-14", "name": "King's Birthday" },
+    { "date": "2027-12-25", "name": "Christmas Day" },
+    { "date": "2027-12-27", "name": "Additional public holiday for Christmas Day" },
+    { "date": "2027-12-28", "name": "Boxing Day" }
+  ]
+}

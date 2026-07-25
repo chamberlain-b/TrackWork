@@ -41,7 +41,7 @@ struct DSStatusPill: View {
                 .font(AppTypography.captionStrong)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(Color.ds.textPrimary)
+                .foregroundStyle(style.foreground)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)

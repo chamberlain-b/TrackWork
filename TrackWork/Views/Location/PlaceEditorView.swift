@@ -51,7 +51,7 @@ struct PlaceEditorView: View {
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                             Text("No place selected")
                                 .foregroundStyle(Color.ds.textPrimary)
-                            Text("Search for an address or use your current location.")
+                            Text("Choose an address or map point.")
                                 .font(AppTypography.caption)
                                 .foregroundStyle(Color.ds.textSecondary)
                         }
@@ -64,7 +64,7 @@ struct PlaceEditorView: View {
                 Button {
                     isShowingAddressSearch = true
                 } label: {
-                    Label("Search Address or Place", systemImage: "magnifyingglass")
+                    Label("Search", systemImage: "magnifyingglass")
                 }
                 .accessibilityIdentifier("placeEditor.searchAddress")
 
@@ -92,10 +92,7 @@ struct PlaceEditorView: View {
             } header: {
                 Text("Location")
             } footer: {
-                Text(
-                    "Address search is provided by Apple Maps. Current Location requests one location fix only "
-                        + "after you choose it; Work Track does not start background or continuous tracking."
-                )
+                Text("Address search uses Apple Maps.")
             }
 
             Section {
@@ -106,9 +103,9 @@ struct PlaceEditorView: View {
                     }
                 }
             } header: {
-                Text("Place Area")
+                Text("Area")
             } footer: {
-                Text("Choose how close you need to be for this place. 150 metres works well for most homes and offices.")
+                Text("150 m works for most places.")
             }
 
             if let selectionNotice {
@@ -178,10 +175,7 @@ struct PlaceEditorView: View {
                 locationService.requestCurrentLocation()
             }
         } message: {
-            Text(
-                "Work Track will ask iOS for one location fix to place this pin. It will not request Always access "
-                    + "or start background or continuous tracking."
-            )
+            Text("Uses one location sample to position the pin. Background tracking stays off.")
         }
         .onChange(of: locationService.locationUpdateID) {
             guard let location = locationService.currentLocation else {

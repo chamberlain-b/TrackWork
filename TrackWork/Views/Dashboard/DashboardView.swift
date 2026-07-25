@@ -6,15 +6,15 @@ struct DashboardView: View {
     @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
     @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
     @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
+    @Query(sort: \PlannedOfficeDay.date) private var plannedOfficeDays: [PlannedOfficeDay]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
-
-    @State private var selectedTrendGranularity: ComplianceTrendGranularity = .monthly
 
     private let onOpenCalendar: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let referenceDate: Date
     private let calendar = Calendar.dashboardCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
+    private let ruleResolver = ComplianceRuleResolver()
     private let trendCalculator = ComplianceTrendCalculator()
 
     init(
@@ -42,11 +42,7 @@ private extension DashboardView {
     }
 
     private var activeRule: ComplianceRule {
-        complianceRules.first ?? ComplianceRule()
-    }
-
-    private var ruleAdapter: DashboardRuleAdapter {
-        DashboardRuleAdapter(rule: activeRule)
+        ruleResolver.rule(for: currentMonthEnd, from: complianceRules) ?? ComplianceRule()
     }
 
     private var selectedISOWeekdays: Set<Int> {
@@ -97,16 +93,6 @@ private extension DashboardView {
         )
     }
 
-    private var scheduledWorkdayDates: Set<Date> {
-        BusinessDayCalculator().eligibleDates(
-            from: currentMonthStart,
-            through: currentMonthEnd,
-            calendar: calendar,
-            selectedISOWeekdays: selectedISOWeekdays,
-            publicHolidays: []
-        )
-    }
-
     private var eligibleDatesBeforeLeave: Set<Date> {
         BusinessDayCalculator().eligibleDates(
             from: currentMonthStart,
@@ -153,52 +139,6 @@ private extension DashboardView {
 
     private var reviewDates: Set<Date> {
         elapsedEligibleDates.subtracting(resolvedElapsedDates)
-    }
-
-    private var targetProgress: Double {
-        guard summary.requiredOfficeDays > 0 else {
-            return 0
-        }
-
-        return min(Double(summary.completedOfficeDays) / Double(summary.requiredOfficeDays), 1)
-    }
-
-    private var remainingOfficeDays: Int {
-        max(0, summary.requiredOfficeDays - summary.completedOfficeDays)
-    }
-
-    private var leaveExclusionCounts: [LeaveType: Int] {
-        let eligibleDates = eligibleDatesBeforeLeave
-        let groupedLeaveRecords = Dictionary(grouping: monthLeaveRecords) { leaveRecord in
-            calendar.startOfDay(for: leaveRecord.date)
-        }
-
-        return groupedLeaveRecords.reduce(into: [:]) { counts, entry in
-            let leaveType = entry.value
-                .filter { leaveRecord in leaveRecord.duration == .fullDay }
-                .sorted { DashboardDataAdapter.leaveRecordSort($0, $1) }
-                .compactMap(\.leaveType)
-                .first
-
-            guard eligibleDates.contains(entry.key), let leaveType
-            else {
-                return
-            }
-
-            counts[leaveType, default: 0] += 1
-        }
-    }
-
-    private var annualLeaveExcludedDays: Int {
-        leaveExclusionCounts[.annualLeave, default: 0]
-    }
-
-    private var sickLeaveExcludedDays: Int {
-        leaveExclusionCounts[.sickLeave, default: 0]
-    }
-
-    private var publicHolidaysExcludedDays: Int {
-        scheduledWorkdayDates.intersection(publicHolidayDates).count
     }
 
     private var leaveExclusionDates: Set<Date> {
@@ -254,6 +194,21 @@ private extension DashboardView {
         }.count
     }
 
+    private var remainingPlannedOfficeDates: [Date] {
+        Set(
+            plannedOfficeDays.compactMap { plannedDay in
+                let date = calendar.startOfDay(for: plannedDay.date)
+                guard adjustedEligibleDates.contains(date),
+                      date >= today,
+                      !completedOfficeDates.contains(date) else {
+                    return nil
+                }
+                return date
+            }
+        )
+        .sorted()
+    }
+
     private var hasPeriodData: Bool {
         !monthAttendanceDays.isEmpty || !monthLeaveRecords.isEmpty
     }
@@ -288,31 +243,23 @@ private extension DashboardView {
             return .complete
         }
 
-        if possibleRemainingOfficeDates < remainingOfficeDays {
+        if possibleRemainingOfficeDates < summary.officeDaysNeeded {
             return .notReachable
         }
 
         return .reachable
     }
 
-    private var requirementExplanation: String {
-        ruleAdapter.requirementExplanation(for: summary)
-    }
-
-    private var jurisdictionName: String {
-        ruleAdapter.jurisdictionName
-    }
-
-    private var recentTrend: [ComplianceTrendPoint] {
-        guard !complianceRules.isEmpty else {
+    private var recentMonthlyTrend: [ComplianceTrendPoint] {
+        guard hasConfiguredTarget else {
             return []
         }
 
         return trendCalculator.points(
-            granularity: selectedTrendGranularity,
+            granularity: .monthly,
             endingAt: today,
             calendar: calendar,
-            rule: activeRule,
+            rules: complianceRules,
             attendanceDays: attendanceDays,
             leaveRecords: leaveRecords,
             publicHolidays: publicHolidays,
@@ -334,49 +281,30 @@ extension DashboardView {
                             ComplianceHeroCard(
                                 monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
                                 completedOfficeDays: summary.completedOfficeDays,
-                                requiredOfficeDays: summary.requiredOfficeDays,
-                                remainingOfficeDays: remainingOfficeDays,
-                                availableOfficeDays: possibleRemainingOfficeDates,
-                                progress: targetProgress,
+                                businessDaysToDate: summary.eligibleDaysToDate,
+                                remainingOfficeDays: summary.officeDaysNeeded,
+                                currentCompliance: summary.officeShareToDate,
                                 status: dashboardStatus,
                                 targetIsConfigured: hasConfiguredTarget
                             )
 
                             if !reviewDates.isEmpty {
                                 DashboardReviewAction(
-                                    reviewCount: reviewDates.count,
-                                    onOpenCalendar: onOpenCalendar
+                                    reviewCount: reviewDates.count
                                 )
                             } else if !hasPeriodData {
                                 DashboardStartAction(onOpenCalendar: onOpenCalendar)
                             }
                         }
 
-                        MonthAtAGlanceSection(
-                            eligibleDaysToDate: summary.eligibleDaysToDate,
-                            confirmedDays: confirmedDatesThroughToday.count,
-                            officeShareToDate: summary.officeShareToDate,
-                            officeDaysToDate: summary.completedOfficeDays,
-                            reviewDays: reviewDates.count
-                        )
-
                         if hasConfiguredTarget {
-                            RecentTrendCard(
-                                points: recentTrend,
-                                selectedGranularity: $selectedTrendGranularity
-                            )
+                            DashboardTrendPreview(points: recentMonthlyTrend)
                         }
 
-                        MonthCalculationCard(
-                            scheduledWorkdays: scheduledWorkdayDates.count,
-                            publicHolidays: publicHolidaysExcludedDays,
-                            annualLeave: annualLeaveExcludedDays,
-                            sickLeave: sickLeaveExcludedDays,
-                            customExcluded: summary.customExcludedDays,
-                            eligibleWorkdays: summary.adjustedEligibleDays,
-                            requiredOfficeDays: summary.requiredOfficeDays,
-                            jurisdictionName: jurisdictionName,
-                            explanation: requirementExplanation
+                        UpcomingOfficePlanSection(
+                            plannedDates: remainingPlannedOfficeDates,
+                            displayedMonth: currentMonthStart,
+                            referenceDate: referenceDate
                         )
                     }
                 }
@@ -386,6 +314,17 @@ extension DashboardView {
             .appScreenBackground()
             .navigationTitle("Summary")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        QuickCheckInView()
+                    } label: {
+                        Label("Check In", systemImage: "location.circle")
+                    }
+                    .accessibilityHint("Checks whether you are at a saved home or office location")
+                    .accessibilityIdentifier("dashboard.quickCheckIn")
+                }
+            }
         }
     }
 

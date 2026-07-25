@@ -3,6 +3,8 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedTab: AppTab = .summary
+    @State private var appIntentRouter = WorkTrackAppIntentRouter.shared
+    @State private var intentPresentation: IntentPresentation?
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -18,17 +20,44 @@ struct ContentView: View {
             }
 
             Tab("History", systemImage: "list.bullet.rectangle", value: AppTab.history) {
-                RecordsView()
-            }
-
-            Tab("Insights", systemImage: "chart.xyaxis.line", value: AppTab.insights) {
-                InsightsHubView()
+                RecordsView(onOpenCalendar: { selectedTab = .calendar })
             }
 
             Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
                 SettingsView()
             }
         }
+        .task {
+            handlePendingIntent()
+        }
+        .onChange(of: appIntentRouter.pendingHandoff) { _, _ in
+            handlePendingIntent()
+        }
+        .sheet(item: $intentPresentation) { presentation in
+            NavigationStack {
+                switch presentation {
+                case .recordToday(let status):
+                    TodayIntentReviewView(status: status)
+                case .reviewPendingDays:
+                    ReviewQueueView()
+                }
+            }
+        }
+    }
+
+    private func handlePendingIntent() {
+        guard let handoff = appIntentRouter.pendingHandoff else {
+            return
+        }
+
+        selectedTab = .summary
+        switch handoff.action {
+        case .recordToday(let status):
+            intentPresentation = .recordToday(status)
+        case .reviewPendingDays:
+            intentPresentation = .reviewPendingDays
+        }
+        appIntentRouter.clearHandoff(id: handoff.id)
     }
 }
 
@@ -36,82 +65,63 @@ private enum AppTab: Hashable {
     case summary
     case calendar
     case history
-    case insights
     case settings
 }
 
-private struct InsightsHubView: View {
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    NavigationLink {
-                        ComplianceView(usesNavigationStack: false)
-                    } label: {
-                        InsightsDestinationRow(
-                            systemImage: "target",
-                            title: "Compliance",
-                            subtitle: "Review a period and compare your result with a threshold",
-                            color: Color.ds.accentPrimary
-                        )
-                    }
-                } header: {
-                    Text("Progress")
-                }
+private enum IntentPresentation: Identifiable {
+    case recordToday(TodayAttendanceIntentValue)
+    case reviewPendingDays
 
-                Section {
-                    NavigationLink {
-                        ExportView(usesNavigationStack: false)
-                    } label: {
-                        InsightsDestinationRow(
-                            systemImage: "square.and.arrow.up",
-                            title: "Export reports",
-                            subtitle: "Create a private PDF or spreadsheet-compatible report",
-                            color: Color.ds.info
-                        )
-                    }
-                    .accessibilityIdentifier("insights.export")
-                } header: {
-                    Text("Reports")
-                } footer: {
-                    Text("Reports exclude raw location events and GPS coordinates by default.")
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .appScreenBackground()
-            .navigationTitle("Insights")
+    var id: String {
+        switch self {
+        case .recordToday(let status): "record-\(status.rawValue)"
+        case .reviewPendingDays: "review"
         }
     }
 }
 
-private struct InsightsDestinationRow: View {
-    let systemImage: String
-    let title: String
-    let subtitle: String
-    let color: Color
+private struct TodayIntentReviewView: View {
+    @Query(sort: \AttendanceDay.date) private var attendanceDays: [AttendanceDay]
+    @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
+    @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
+    @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
+    @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
+
+    let status: TodayAttendanceIntentValue
+
+    private let date = Date.now
+    private let calendar = Calendar.workTrackCalendar
+    private let ruleResolver = ComplianceRuleResolver()
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppSpacing.md) {
-            Image(systemName: systemImage)
-                .font(.headline)
-                .foregroundStyle(color)
-                .frame(width: 36, height: 36)
-                .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous))
-                .accessibilityHidden(true)
+        DayDetailView(
+            date: date,
+            attendanceDay: attendanceDays.first { calendar.isDate($0.date, inSameDayAs: date) },
+            leaveRecord: leaveRecords.first { calendar.isDate($0.date, inSameDayAs: date) },
+            publicHoliday: ActiveJurisdictionHolidayResolver.holiday(
+                on: date,
+                from: publicHolidays,
+                jurisdictionId: activeRule.jurisdictionId,
+                calendar: calendar
+            ),
+            customExcludedDay: customExcludedDays.first { calendar.isDate($0.date, inSameDayAs: date) },
+            proposedStatus: status.attendanceClassification
+        )
+    }
 
-            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                Text(title)
-                    .font(AppTypography.headline)
-                    .foregroundStyle(Color.ds.textPrimary)
+    private var activeRule: ComplianceRule {
+        ruleResolver.rule(for: date, from: complianceRules) ?? ComplianceRule()
+    }
+}
 
-                Text(subtitle)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+private extension TodayAttendanceIntentValue {
+    var attendanceClassification: AttendanceClassification {
+        switch self {
+        case .office: .office
+        case .home: .home
+        case .annualLeave: .annualLeave
+        case .sickLeave: .sickLeave
         }
-        .padding(.vertical, AppSpacing.xxs)
-        .accessibilityElement(children: .combine)
     }
 }
 

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "countryCode": "NZ",
+  "jurisdictionCode": "NZ-NATIONAL",
+  "year": 2027,
+  "sourceName": "New Zealand Government public holiday dates",
+  "sourceURL": "https://www.govt.nz/browse/work/public-holidays-and-work/public-holidays-and-anniversary-dates/",
+  "verifiedExhaustive": true,
+  "holidays": [
+    { "date": "2027-01-01", "name": "New Year's Day" },
+    { "date": "2027-01-02", "name": "Day after New Year's Day" },
+    { "date": "2027-01-04", "name": "Day after New Year's Day (observed)" },
+    { "date": "2027-02-06", "name": "Waitangi Day" },
+    { "date": "2027-02-08", "name": "Waitangi Day (observed)" },
+    { "date": "2027-03-26", "name": "Good Friday" },
+    { "date": "2027-03-29", "name": "Easter Monday" },
+    { "date": "2027-04-25", "name": "Anzac Day" },
+    { "date": "2027-04-26", "name": "Anzac Day (observed)" },
+    { "date": "2027-06-07", "name": "King's Birthday" },
+    { "date": "2027-06-25", "name": "Matariki" },
+    { "date": "2027-10-25", "name": "Labour Day" },
+    { "date": "2027-12-25", "name": "Christmas Day" },
+    { "date": "2027-12-26", "name": "Boxing Day" },
+    { "date": "2027-12-27", "name": "Christmas Day (observed)" },
+    { "date": "2027-12-28", "name": "Boxing Day (observed)" }
+  ]
+}

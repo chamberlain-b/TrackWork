@@ -19,6 +19,7 @@ final class DataManagementServiceTests: XCTestCase {
         context.insert(attendanceDay)
         context.insert(LeaveRecord(date: date("2026-07-07"), leaveType: .sickLeave, note: "Private leave note"))
         context.insert(CustomExcludedDay(date: date("2026-07-08"), reason: "Private exclusion"))
+        context.insert(PlannedOfficeDay(date: date("2026-07-09"), note: "Private office plan"))
         context.insert(
             ManualAdjustment(
                 attendanceDayId: attendanceDay.id,
@@ -85,6 +86,7 @@ final class DataManagementServiceTests: XCTestCase {
         XCTAssertTrue(try fetch(AttendanceDay.self, from: context).isEmpty)
         XCTAssertTrue(try fetch(LeaveRecord.self, from: context).isEmpty)
         XCTAssertTrue(try fetch(CustomExcludedDay.self, from: context).isEmpty)
+        XCTAssertTrue(try fetch(PlannedOfficeDay.self, from: context).isEmpty)
         XCTAssertTrue(try fetch(ManualAdjustment.self, from: context).isEmpty)
         XCTAssertTrue(try fetch(Place.self, from: context).isEmpty)
         XCTAssertTrue(try fetch(LocationEvent.self, from: context).isEmpty)
@@ -147,6 +149,7 @@ final class DataManagementServiceTests: XCTestCase {
             ManualAdjustment.self,
             ComplianceRule.self,
             CustomExcludedDay.self,
+            PlannedOfficeDay.self,
             Place.self,
             LocationEvent.self,
             PublicHoliday.self

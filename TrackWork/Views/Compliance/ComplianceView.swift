@@ -11,13 +11,18 @@ struct ComplianceView: View {
     @State private var selectedPeriod: CompliancePeriodPreset = .currentMonth
     @State private var customRangeStart = Date.now
     @State private var customRangeEnd = Date.now
+    @State private var selectedTrendGranularity: ComplianceTrendGranularity = .monthly
 
     private let usesNavigationStack: Bool
+    private let title: String
     private let calendar = Calendar.complianceCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
+    private let ruleResolver = ComplianceRuleResolver()
+    private let trendCalculator = ComplianceTrendCalculator()
 
-    init(usesNavigationStack: Bool = true) {
+    init(usesNavigationStack: Bool = true, title: String = "Compliance") {
         self.usesNavigationStack = usesNavigationStack
+        self.title = title
     }
 
     private var today: Date {
@@ -34,7 +39,15 @@ struct ComplianceView: View {
     }
 
     private var activeRule: ComplianceRule {
-        complianceRules.first ?? ComplianceRule()
+        ruleResolver.rule(for: periodRange.end, from: complianceRules) ?? ComplianceRule()
+    }
+
+    private var ruleAdapter: DashboardRuleAdapter {
+        DashboardRuleAdapter(rule: activeRule)
+    }
+
+    private var holidayCoverageWarning: String? {
+        HolidayCoverage.validation(for: periodRange, calendar: calendar).userFacingMessage
     }
 
     private var periodAttendanceDays: [AttendanceDay] {
@@ -73,7 +86,7 @@ struct ComplianceView: View {
     }
 
     private var remainingOfficeDays: Int {
-        max(0, summary.requiredOfficeDays - summary.completedOfficeDays)
+        summary.officeDaysNeeded
     }
 
     private var targetMet: Bool? {
@@ -101,10 +114,14 @@ struct ComplianceView: View {
 
     private var resultText: String {
         guard let targetMet else {
-            return "No elapsed workdays"
+            return "No eligible days yet"
         }
 
-        return targetMet ? "Meets saved target" : "Below saved target"
+        guard !targetMet else {
+            return "Target met"
+        }
+
+        return "Below target"
     }
 
     private var targetValue: String {
@@ -120,39 +137,40 @@ struct ComplianceView: View {
     private var targetSubtitle: String {
         switch activeRule.requirementType ?? .fixedMonthlyDays {
         case .fixedMonthlyDays:
-            return "Saved fixed days per period"
+            return "For selected period"
         case .percentageOfEligibleDays:
-            return "Saved percentage rule"
+            return "Of eligible workdays"
         }
     }
 
-    private var differenceValue: String {
-        guard elapsedEligibleDays > 0 else {
-            return "—"
-        }
+    private var isPercentageTarget: Bool {
+        (activeRule.requirementType ?? .fixedMonthlyDays) == .percentageOfEligibleDays
+    }
 
+    private var hasConfiguredTarget: Bool {
         switch activeRule.requirementType ?? .fixedMonthlyDays {
         case .fixedMonthlyDays:
-            let difference = summary.completedOfficeDays - summary.requiredOfficeDays
-            return difference > 0 ? "+\(difference) days" : "\(difference) days"
+            return (activeRule.fixedRequiredDays ?? 0) > 0
         case .percentageOfEligibleDays:
-            guard let actualPercentage else {
-                return "—"
-            }
-
-            let difference = actualPercentage - (activeRule.requiredPercentage ?? 0)
-            return difference.formatted(.percent.precision(.fractionLength(0...1)).sign(strategy: .always()))
+            return (activeRule.requiredPercentage ?? 0) > 0
         }
     }
 
-    private var differenceSubtitle: String {
-        targetMet.map { $0 ? "At or above target" : "Still needed for this period" }
-            ?? "No elapsed eligible days"
-    }
+    private var recentTrend: [ComplianceTrendPoint] {
+        guard !complianceRules.isEmpty else {
+            return []
+        }
 
-    private var comparisonColor: Color {
-        targetMet.map { $0 ? Color.ds.success : Color.ds.warning }
-            ?? Color.ds.textSecondary
+        return trendCalculator.points(
+            granularity: selectedTrendGranularity,
+            endingAt: today,
+            calendar: calendar,
+            rules: complianceRules,
+            attendanceDays: attendanceDays,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays
+        )
     }
 
     private var periodTitle: String {
@@ -177,37 +195,57 @@ struct ComplianceView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
                 periodSection
-                DSInsightCallout(
-                    icon: "checkmark.seal",
-                    message: "This comparison uses the saved workdays, jurisdiction, exclusions, and compliance rule.",
-                    highlightedText: "Saved rule"
-                )
+                if let holidayCoverageWarning {
+                    DSInsightCallout(
+                        icon: "exclamationmark.triangle.fill",
+                        message: holidayCoverageWarning,
+                        highlightedText: "Holiday data unavailable"
+                    )
+                    .accessibilityIdentifier("compliance.holidayCoverageWarning")
+                }
                 ComplianceResultsSection(
                     actualPercentage: actualPercentage,
                     targetValue: targetValue,
                     targetSubtitle: targetSubtitle,
-                    differenceValue: differenceValue,
-                    differenceSubtitle: differenceSubtitle,
-                    comparisonColor: comparisonColor,
+                    targetPercentage: activeRule.requiredPercentage,
+                    isPercentageTarget: isPercentageTarget,
+                    targetMet: targetMet,
                     completedOfficeDays: summary.completedOfficeDays,
                     eligibleWorkdays: summary.adjustedEligibleDays,
+                    eligibleDaysToDate: summary.eligibleDaysToDate,
                     remainingOfficeDays: remainingOfficeDays,
                     resultText: resultText,
                     resultStyle: resultStyle
                 )
+
+                if hasConfiguredTarget {
+                    ComplianceCalculationDisclosure(
+                        startingEligibleWorkdays: summary.baseEligibleDays,
+                        excludedWorkdays: max(0, summary.baseEligibleDays - summary.adjustedEligibleDays),
+                        eligibleWorkdays: summary.adjustedEligibleDays,
+                        requiredOfficeDays: summary.requiredOfficeDays,
+                        jurisdictionName: ruleAdapter.jurisdictionName,
+                        explanation: ruleAdapter.requirementExplanation(for: summary)
+                    )
+
+                    RecentTrendCard(
+                        points: recentTrend,
+                        selectedGranularity: $selectedTrendGranularity
+                    )
+                }
             }
             .padding(.horizontal, AppSpacing.screenHorizontal)
             .padding(.vertical, AppSpacing.lg)
         }
         .appScreenBackground()
-        .navigationTitle("Compliance")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(title == "Insights" ? .large : .inline)
     }
 
     private var periodSection: some View {
         DSCard(includesShadow: false) {
             VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("Compliance period")
+                Text("Period")
                     .font(AppTypography.cardTitle)
                     .foregroundStyle(Color.ds.textPrimary)
 
@@ -222,6 +260,7 @@ struct ComplianceView: View {
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

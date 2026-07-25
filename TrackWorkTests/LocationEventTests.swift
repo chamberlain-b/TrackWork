@@ -62,6 +62,54 @@ final class LocationEventTests: XCTestCase {
         XCTAssertEqual(LocationTrackingService.placeId(from: region.identifier), placeId)
     }
 
+    @MainActor
+    func testUnchangedGeofenceRegionMatchesWithoutReregistration() throws {
+        let place = Place(
+            name: "Office",
+            type: .office,
+            latitude: -37.8136,
+            longitude: 144.9631,
+            radiusMeters: 150
+        )
+        let desired = try XCTUnwrap(
+            LocationTrackingService.makeRegion(for: place, maximumMonitoringDistance: 500)
+        )
+        let unchanged = CLCircularRegion(
+            center: desired.center,
+            radius: desired.radius,
+            identifier: desired.identifier
+        )
+        unchanged.notifyOnEntry = true
+        unchanged.notifyOnExit = true
+
+        XCTAssertTrue(LocationTrackingService.region(unchanged, matches: desired))
+
+        let changed = CLCircularRegion(
+            center: desired.center,
+            radius: desired.radius + 50,
+            identifier: desired.identifier
+        )
+        XCTAssertFalse(LocationTrackingService.region(changed, matches: desired))
+    }
+
+    @MainActor
+    func testAutomaticTrackingPreferenceCanBeDisabledWithoutLocationPermission() {
+        let suiteName = "LocationEventTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let service = LocationTrackingService(
+            defaults: defaults,
+            automaticBackgroundTrackingEnabled: true,
+            isUITesting: false
+        )
+
+        XCTAssertTrue(service.isAutomaticTrackingEnabled)
+        XCTAssertTrue(service.setAutomaticTrackingEnabled(false, for: []))
+        XCTAssertFalse(service.isAutomaticTrackingEnabled)
+        XCTAssertFalse(defaults.bool(forKey: LocationTrackingService.automationPreferenceKey))
+    }
+
     func testActiveHolidayResolverDoesNotLeakAnotherJurisdiction() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

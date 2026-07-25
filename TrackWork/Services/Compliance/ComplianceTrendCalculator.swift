@@ -43,6 +43,57 @@ struct ComplianceTrendCalculator {
         publicHolidays: [PublicHoliday],
         customExcludedDays: [CustomExcludedDay]
     ) -> [ComplianceTrendPoint] {
+        points(
+            granularity: granularity,
+            endingAt: referenceDate,
+            bucketCount: bucketCount,
+            calendar: calendar,
+            ruleForRange: { _ in rule },
+            attendanceDays: attendanceDays,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays
+        )
+    }
+
+    func points(
+        granularity: ComplianceTrendGranularity,
+        endingAt referenceDate: Date,
+        bucketCount: Int = 6,
+        calendar: Calendar,
+        rules: [ComplianceRule],
+        attendanceDays: [AttendanceDay],
+        leaveRecords: [LeaveRecord],
+        publicHolidays: [PublicHoliday],
+        customExcludedDays: [CustomExcludedDay]
+    ) -> [ComplianceTrendPoint] {
+        let resolver = ComplianceRuleResolver()
+        return points(
+            granularity: granularity,
+            endingAt: referenceDate,
+            bucketCount: bucketCount,
+            calendar: calendar,
+            ruleForRange: { range in
+                resolver.rule(for: range.end, from: rules) ?? ComplianceRule()
+            },
+            attendanceDays: attendanceDays,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays
+        )
+    }
+
+    private func points(
+        granularity: ComplianceTrendGranularity,
+        endingAt referenceDate: Date,
+        bucketCount: Int,
+        calendar: Calendar,
+        ruleForRange: (ComplianceDateRange) -> ComplianceRule,
+        attendanceDays: [AttendanceDay],
+        leaveRecords: [LeaveRecord],
+        publicHolidays: [PublicHoliday],
+        customExcludedDays: [CustomExcludedDay]
+    ) -> [ComplianceTrendPoint] {
         guard bucketCount > 0 else {
             return []
         }
@@ -63,7 +114,7 @@ struct ComplianceTrendCalculator {
                 CompliancePeriodEvaluator.Input(
                     range: range,
                     calendar: calendar,
-                    rule: rule,
+                    rule: ruleForRange(range),
                     attendanceDays: attendanceDays,
                     leaveRecords: leaveRecords,
                     publicHolidays: publicHolidays,

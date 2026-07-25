@@ -47,6 +47,10 @@ struct ComplianceSummary: Equatable {
     let completedOfficeDays: Int
     let reviewRequiredDays: Int
 
+    var officeDaysNeeded: Int {
+        max(0, requiredOfficeDays - completedOfficeDays)
+    }
+
     var officeShareToDate: Double? {
         guard eligibleDaysToDate > 0 else {
             return nil

@@ -10,6 +10,8 @@ struct DSProgressCard: View {
     var statusStyle: DSStatusPillStyle = .success
     var footerCaption: String?
     var showsProgress = true
+    var showsProgressPercentage = true
+    var progressMetricTitle: String?
     var progressTint: Color = Color.ds.accentPrimary
     var progressAccessibilityLabel: String?
     var progressAccessibilityValue: String?
@@ -19,36 +21,61 @@ struct DSProgressCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             summary
 
             if showsProgress {
                 ProgressView(value: clampedProgress)
                     .tint(progressTint)
-                    .background(Color.ds.accentMuted.opacity(0.28), in: Capsule())
-                    .scaleEffect(x: 1, y: 1.8, anchor: .center)
+                    .background(Color.ds.accentMuted.opacity(0.22), in: Capsule())
+                    .scaleEffect(x: 1, y: 1.55, anchor: .center)
                     .accessibilityLabel(progressAccessibilityLabel ?? "\(sectionTitle) progress")
                     .accessibilityValue(progressAccessibilityValue ?? formattedProgress)
             }
 
             if let footerCaption {
-                Text(footerCaption)
-                    .font(AppTypography.caption)
+                Label(footerCaption, systemImage: "calendar")
+                    .font(AppTypography.caption.monospacedDigit())
                     .foregroundStyle(Color.ds.textSecondary)
+                    .labelStyle(.titleAndIcon)
             }
         }
         .padding(AppSpacing.lg)
-        .background(Color.ds.surfaceBlueTint)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous))
+        .background(.regularMaterial)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.ds.surfaceBlueTint.opacity(0.82),
+                    Color.ds.surfacePrimary.opacity(0.52)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(cardShape)
         .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
-                .stroke(Color.ds.borderSubtle, lineWidth: 1)
+            cardShape.strokeBorder(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.78),
+                        Color.ds.borderSubtle.opacity(0.52)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 0.8
+            )
         }
-        .shadow(color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity), radius: AppShadow.cardRadius, x: 0, y: AppShadow.cardY)
+        .shadow(
+            color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity * 0.72),
+            radius: AppShadow.cardRadius * 0.88,
+            x: 0,
+            y: AppShadow.cardY * 0.8
+        )
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.lg) {
+        VStack(alignment: .leading, spacing: AppSpacing.md) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top) {
                     sectionHeading
@@ -62,32 +89,72 @@ struct DSProgressCard: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                Text(metricText)
-                    .font(AppTypography.heroMetric.monospacedDigit())
-                    .foregroundStyle(Color.ds.textPrimary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
-
-                HStack(alignment: .firstTextBaseline) {
-                    Text(detailText)
-                        .font(AppTypography.callout.monospacedDigit())
-                        .foregroundStyle(Color.ds.textSecondary)
-
-                    Spacer(minLength: AppSpacing.sm)
-
-                    if showsProgress {
-                        Text(formattedProgress)
-                            .font(AppTypography.captionStrong.monospacedDigit())
-                            .foregroundStyle(progressTint)
-                    }
-                }
-            }
+            metricSummary
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(sectionTitle)
         .accessibilityValue(summaryAccessibilityValue)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private var metricSummary: some View {
+        if let progressMetricTitle, showsProgress {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: AppSpacing.lg) {
+                    primaryMetric
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    progressMetric(title: progressMetricTitle)
+                }
+
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    primaryMetric
+                    progressMetric(title: progressMetricTitle)
+                }
+            }
+        } else {
+            primaryMetric
+        }
+    }
+
+    private var primaryMetric: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text(metricText)
+                .font(AppTypography.heroMetric.monospacedDigit())
+                .foregroundStyle(Color.ds.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(detailText)
+                    .font(AppTypography.callout.monospacedDigit())
+                    .foregroundStyle(Color.ds.textSecondary)
+
+                Spacer(minLength: AppSpacing.sm)
+
+                if showsProgress && showsProgressPercentage && progressMetricTitle == nil {
+                    Text(formattedProgress)
+                        .font(AppTypography.captionStrong.monospacedDigit())
+                        .foregroundStyle(progressTint)
+                }
+            }
+        }
+    }
+
+    private func progressMetric(title: String) -> some View {
+        VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
+            Text(formattedProgress)
+                .font(AppTypography.title.monospacedDigit())
+                .foregroundStyle(progressTint)
+
+            Text(title)
+                .font(AppTypography.captionStrong)
+                .foregroundStyle(Color.ds.textSecondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(formattedProgress)
     }
 
     private var sectionHeading: some View {
@@ -107,8 +174,17 @@ struct DSProgressCard: View {
         clampedProgress.formatted(.percent.precision(.fractionLength(0)))
     }
 
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
+    }
+
     private var summaryAccessibilityValue: String {
-        [metricText, detailText, statusText]
+        [
+            metricText,
+            detailText,
+            progressMetricTitle.map { "\(formattedProgress) \($0)" },
+            statusText
+        ]
             .compactMap { $0 }
             .joined(separator: ", ")
     }

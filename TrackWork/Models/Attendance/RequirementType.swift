@@ -9,9 +9,9 @@ enum RequirementType: String, Codable, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .fixedMonthlyDays:
-            "Fixed days per period"
+            "Fixed office days"
         case .percentageOfEligibleDays:
-            "Percentage of eligible days"
+            "Percentage of workdays"
         }
     }
 }

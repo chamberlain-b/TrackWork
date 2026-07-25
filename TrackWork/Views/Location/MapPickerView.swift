@@ -92,7 +92,7 @@ struct MapPickerView: View {
                     .accessibilityIdentifier("mapPicker.useCenter")
                 }
 
-                Text("Tap the map to move the pin, or position the map and choose Use Center.")
+                Text("Tap the map or use its center.")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
             }

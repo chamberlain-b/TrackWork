@@ -19,9 +19,10 @@ struct BatchLeaveView: View {
     @State private var saveError: String?
 
     private let calendar = Calendar.workTrackCalendar
+    private let ruleResolver = ComplianceRuleResolver()
 
     private var activeRule: ComplianceRule {
-        complianceRules.first ?? ComplianceRule()
+        ruleResolver.rule(for: normalizedRange.end, from: complianceRules) ?? ComplianceRule()
     }
 
     private var selectedISOWeekdays: Set<Int> {
@@ -125,7 +126,7 @@ struct BatchLeaveView: View {
                     }
                 }
             }
-            .navigationTitle("Batch Leave")
+            .navigationTitle("Add Leave")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

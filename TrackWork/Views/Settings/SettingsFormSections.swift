@@ -1,28 +1,30 @@
 import SwiftUI
+import UIKit
 
 struct SettingsLocationSection: View {
     var body: some View {
         Section {
             NavigationLink {
+                AutomaticLocationTrackingView()
+            } label: {
+                Label("Automatic Attendance", systemImage: "location.viewfinder")
+            }
+            .accessibilityIdentifier("settings.automaticAttendance")
+
+            NavigationLink {
                 LocationSetupView()
             } label: {
-                Label("Location Setup", systemImage: "location.circle")
+                Label("Locations", systemImage: "location.circle")
             }
+            .accessibilityIdentifier("settings.locations")
 
-            #if DEBUG
             NavigationLink {
                 RecentLocationEventsView()
             } label: {
-                Label("Recent Location Events", systemImage: "list.bullet.rectangle")
+                Label("Location Events", systemImage: "list.bullet.rectangle")
             }
-            #endif
         } header: {
             Text("Location")
-        } footer: {
-            Text(
-                "Save home and office places by searching for an address, using your current location, or "
-                    + "adjusting the map. Location is requested only when you choose it; background detection is off."
-            )
         }
     }
 }
@@ -42,7 +44,7 @@ struct SettingsRegionSection: View {
             }
             .accessibilityIdentifier("settings.country")
 
-            Picker("Jurisdiction", selection: $jurisdictionId) {
+            Picker("State or region", selection: $jurisdictionId) {
                 ForEach(availableJurisdictions) { jurisdiction in
                     Text(jurisdiction.displayName)
                         .tag(jurisdiction.id)
@@ -50,9 +52,7 @@ struct SettingsRegionSection: View {
             }
             .accessibilityIdentifier("settings.jurisdiction")
         } header: {
-            Text("Region")
-        } footer: {
-            Text("Public holidays and monthly compliance use the selected country and jurisdiction.")
+            Text("Public holidays")
         }
     }
 }
@@ -65,7 +65,7 @@ struct SettingsComplianceRuleSection: View {
 
     var body: some View {
         Section {
-            Picker("Requirement", selection: $requirementType) {
+            Picker("Target type", selection: $requirementType) {
                 ForEach(RequirementType.allCases) { requirementType in
                     Text(requirementType.displayName)
                         .tag(requirementType)
@@ -74,68 +74,200 @@ struct SettingsComplianceRuleSection: View {
             .accessibilityIdentifier("settings.requirementType")
 
             if requirementType == .fixedMonthlyDays {
-                LabeledContent("Required office days") {
+                LabeledContent("Days per period") {
                     TextField("Days", value: $fixedRequiredDays, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
                         .accessibilityIdentifier("settings.fixedRequiredDays")
                 }
 
-                Toggle("Prorate fixed target for leave", isOn: $prorateFixedTarget)
+                Toggle("Reduce for full-day leave", isOn: $prorateFixedTarget)
                     .accessibilityIdentifier("settings.prorateFixedTarget")
             } else {
-                LabeledContent("Required percentage") {
-                    TextField(
-                        "Percent",
-                        value: $requiredPercentageInput,
-                        format: .number.precision(.fractionLength(0...2))
-                    )
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
+                LabeledContent("Required office rate") {
+                    HStack(spacing: AppSpacing.xxs) {
+                        TextField(
+                            "Percent",
+                            value: $requiredPercentageInput,
+                            format: .number.precision(.fractionLength(0...2))
+                        )
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 72)
+
+                        Text("%")
+                            .foregroundStyle(Color.ds.textSecondary)
+                    }
                 }
             }
         } header: {
-            Text("Compliance Rule")
+            Text("Office target")
         } footer: {
             if requirementType == .fixedMonthlyDays {
-                Text("Fixed days must be 0 or greater. Leave prorating is on by default.")
+                Text("When enabled, full-day leave lowers the target.")
             } else {
-                Text("Enter a percentage from 0 to 100. The stored rule uses the equivalent 0 to 1 value.")
+                Text("Based on eligible workdays.")
             }
         }
     }
 }
 
-struct SettingsOfficeDaySection: View {
+struct SettingsWorkScheduleSection: View {
     @Binding var minimumOfficeMinutes: Int
-
-    var body: some View {
-        Section {
-            LabeledContent("Minimum office minutes") {
-                TextField("Minutes", value: $minimumOfficeMinutes, format: .number)
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-            }
-        } header: {
-            Text("Office Day")
-        } footer: {
-            Text("Minimum office minutes must be 0 or greater.")
-        }
-    }
-}
-
-struct SettingsWorkdaysSection: View {
     let workdays: [SettingsWorkdaySelection]
 
     var body: some View {
         Section {
-            ForEach(workdays) { workday in
-                Toggle(workday.name, isOn: workday.isSelected)
+            NavigationLink {
+                SettingsWorkdaysView(workdays: workdays)
+            } label: {
+                LabeledContent("Workdays", value: selectedWorkdaysSummary)
+            }
+            .accessibilityIdentifier("settings.workdays")
+
+            LabeledContent("Minimum office time") {
+                HStack(spacing: AppSpacing.xxs) {
+                    TextField("Minutes", value: $minimumOfficeMinutes, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 72)
+
+                    Text("min")
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
             }
         } header: {
-            Text("Selected Workdays")
+            Text("Work schedule")
         } footer: {
-            Text("At least one workday must remain selected. Monday to Friday is the default.")
+            Text("For days split between home and office.")
+        }
+    }
+
+    private var selectedWorkdaysSummary: String {
+        let selectedIds = workdays
+            .filter { $0.isSelected.wrappedValue }
+            .map(\.id)
+
+        if selectedIds == [1, 2, 3, 4, 5] {
+            return "Mon–Fri"
+        }
+
+        if selectedIds.count == 7 {
+            return "Every day"
+        }
+
+        return "\(selectedIds.count) days"
+    }
+}
+
+private struct SettingsWorkdaysView: View {
+    let workdays: [SettingsWorkdaySelection]
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(workdays) { workday in
+                    Toggle(workday.name, isOn: workday.isSelected)
+                }
+            } footer: {
+                Text("At least one workday is required.")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
+        .navigationTitle("Workdays")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct SettingsReviewReminderSection: View {
+    @Environment(\.openURL) private var openURL
+    @State private var reminderService = ReviewReminderService()
+    @State private var isUpdating = false
+
+    private var isScheduled: Bool {
+        if case .scheduled = reminderService.status {
+            return true
+        }
+        return false
+    }
+
+    private var needsSystemSettings: Bool {
+        reminderService.status == .authorizationDenied
+    }
+
+    var body: some View {
+        Section {
+            Toggle(
+                "Weekly reminder",
+                isOn: Binding(
+                    get: { isScheduled },
+                    set: updateReminder
+                )
+            )
+            .disabled(isUpdating)
+            .accessibilityIdentifier("settings.reviewReminder")
+
+            if isUpdating {
+                HStack(spacing: AppSpacing.sm) {
+                    ProgressView()
+                    Text("Updating reminder…")
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+            } else if isScheduled {
+                Label("Sunday, 6:00 pm", systemImage: "bell.badge.fill")
+                    .foregroundStyle(Color.ds.success)
+            }
+
+            if needsSystemSettings,
+               let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                Button("Open iOS Settings", systemImage: "gear") {
+                    openURL(settingsURL)
+                }
+            }
+
+            if let errorMessage = reminderService.errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.critical)
+            }
+        } header: {
+            Text("Reminder")
+        } footer: {
+            Text("Runs on device. Notification content is private.")
+        }
+        .task {
+            await reminderService.refreshStatus()
+        }
+    }
+
+    private func updateReminder(_ shouldSchedule: Bool) {
+        guard !isUpdating else { return }
+        isUpdating = true
+
+        Task {
+            if shouldSchedule {
+                let isAuthorized = await reminderService.requestAuthorizationInContext()
+                if isAuthorized {
+                    await reminderService.scheduleWeekly()
+                }
+            } else {
+                await reminderService.cancelWeeklyReminder()
+            }
+            isUpdating = false
+        }
+    }
+}
+
+struct SettingsHolidayCoverageSection: View {
+    var body: some View {
+        Section {
+            Label(HolidayCoverage.statusText, systemImage: "checkmark.seal.fill")
+                .foregroundStyle(Color.ds.success)
+        } header: {
+            Text("Holiday data")
+        } footer: {
+            Text("Update the app for later years.")
         }
     }
 }
@@ -150,9 +282,7 @@ struct SettingsPrivacyDataSection: View {
             }
             .accessibilityIdentifier("settings.privacyData")
         } header: {
-            Text("Privacy")
-        } footer: {
-            Text("Review on-device storage, report privacy, and permanent data deletion controls.")
+            Text("Data")
         }
     }
 }

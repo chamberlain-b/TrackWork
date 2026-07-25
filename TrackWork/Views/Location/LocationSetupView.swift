@@ -16,39 +16,22 @@ struct LocationSetupView: View {
     var body: some View {
         List {
             Section {
-                Label {
-                    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                        Text("Choose places without technical coordinates")
-                            .font(AppTypography.headline)
-                            .foregroundStyle(Color.ds.textPrimary)
-
-                        Text("Search an address, use your current location once, or adjust the pin on a map.")
-                            .font(AppTypography.caption)
-                            .foregroundStyle(Color.ds.textSecondary)
-                    }
-                } icon: {
-                    Image(systemName: "map.fill")
-                        .foregroundStyle(Color.ds.accentPrimary)
+                NavigationLink {
+                    QuickCheckInView()
+                } label: {
+                    Label("Check In", systemImage: "location.circle.fill")
                 }
-            } header: {
-                Text("Place Selection")
-            } footer: {
-                Text(
-                    "Saving a place does not enable automatic attendance detection, background location, or "
-                        + "continuous tracking. Manual attendance remains available."
-                )
-            }
+                .accessibilityIdentifier("locationSetup.quickCheckIn")
 
-            Section {
                 placeRow(for: .home, place: homePlace)
                 placeRow(for: .office, place: officePlace)
             } header: {
                 Text("Places")
             } footer: {
-                Text("Home and office locations are stored on this device and excluded from standard reports.")
+                Text("Saved locations stay on this device.")
             }
         }
-        .navigationTitle("Location Setup")
+        .navigationTitle("Locations")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             locationTrackingService.refreshMonitoring(for: places)

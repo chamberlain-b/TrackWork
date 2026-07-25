@@ -3,19 +3,51 @@ import SwiftUI
 
 struct PrivacyDataView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppPrivacyLockService.self) private var privacyLockService
+    @Environment(LocationTrackingService.self) private var locationTrackingService
 
     @State private var isShowingDeleteConfirmation = false
     @State private var resetResult: ResetResult?
+    @State private var reviewReminderService = ReviewReminderService()
 
     private let dataManagementService = DataManagementService()
 
     var body: some View {
         List {
             Section {
+                Toggle(
+                    "Require device authentication",
+                    isOn: Binding(
+                        get: { privacyLockService.isEnabled },
+                        set: updatePrivacyLock
+                    )
+                )
+                .disabled(privacyLockService.isAuthenticating)
+                .accessibilityIdentifier("privacyData.appLock")
+
+                if privacyLockService.isAuthenticating {
+                    HStack(spacing: AppSpacing.sm) {
+                        ProgressView()
+                        Text("Waiting for authentication…")
+                            .foregroundStyle(Color.ds.textSecondary)
+                    }
+                }
+
+                if let errorMessage = privacyLockService.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(AppTypography.caption)
+                        .foregroundStyle(Color.ds.critical)
+                }
+            } header: {
+                Text("App Lock")
+            } footer: {
+                Text("Uses Face ID, Touch ID or your device passcode after leaving the app.")
+            }
+
+            Section {
                 Label {
                     Text(
-                        "Attendance, leave, notes, compliance settings, saved addresses and coordinates, and location events "
-                            + "stay in this app's on-device storage."
+                        "Attendance, leave, notes, settings and saved locations stay on this device."
                     )
                 } icon: {
                     Image(systemName: "iphone.and.arrow.forward")
@@ -23,36 +55,37 @@ struct PrivacyDataView: View {
                 }
 
                 Label {
-                    Text("Work Track has no account, analytics, advertising, or app-managed cloud sync.")
+                    Text("No account, analytics, advertising or app-managed cloud sync.")
                 } icon: {
                     Image(systemName: "person.crop.circle.badge.xmark")
                         .foregroundStyle(Color.ds.info)
                 }
             } header: {
-                Text("On-Device Storage")
+                Text("Storage")
             } footer: {
-                Text("Your device backup settings are controlled by iOS and may retain earlier app data.")
+                Text("iOS backups may retain earlier app data.")
             }
 
             Section {
                 Label {
-                    Text(
-                        "Address search and lookup are provided by Apple Maps when you choose them. Work Track's "
-                            + "developer does not receive the search or location."
-                    )
+                    Text("Address search uses Apple Maps.")
                 } icon: {
                     Image(systemName: "map.fill")
                         .foregroundStyle(Color.ds.info)
                 }
 
                 Label {
-                    Text(
-                        "Current location is requested only for a one-time place selection. Work Track does not "
-                            + "request Always access or track location continuously."
-                    )
+                    Text("Check In uses one location sample, then discards it.")
                 } icon: {
                     Image(systemName: "location.fill")
                         .foregroundStyle(Color.ds.success)
+                }
+
+                Label {
+                    Text("Automatic Attendance uses saved-area events, not continuous GPS.")
+                } icon: {
+                    Image(systemName: "location.viewfinder")
+                        .foregroundStyle(Color.ds.info)
                 }
             } header: {
                 Text("Location")
@@ -60,23 +93,33 @@ struct PrivacyDataView: View {
 
             Section {
                 Label {
-                    Text("Default PDF and CSV reports exclude raw GPS coordinates and raw location events.")
+                    Text("Standard reports exclude coordinates and location events.")
                 } icon: {
                     Image(systemName: "hand.raised.fill")
                         .foregroundStyle(Color.ds.success)
                 }
 
                 Label {
-                    Text(
-                        "Reports leave Work Track only when you share them. Copies saved in another app or service "
-                            + "are controlled by that destination."
-                    )
+                    Text("Shared copies are controlled by the destination app.")
                 } icon: {
                     Image(systemName: "square.and.arrow.up")
                         .foregroundStyle(Color.ds.info)
                 }
             } header: {
                 Text("Reports")
+            }
+
+            Section {
+                NavigationLink {
+                    PortableBackupView()
+                } label: {
+                    Label("Backup & Restore", systemImage: "externaldrive.badge.timemachine")
+                }
+                .accessibilityIdentifier("privacyData.backup")
+            } header: {
+                Text("Backup")
+            } footer: {
+                Text("JSON backups are not encrypted.")
             }
 
             Section {
@@ -93,12 +136,9 @@ struct PrivacyDataView: View {
                         .accessibilityIdentifier("privacyData.resetStatus")
                 }
             } header: {
-                Text("Delete Data")
+                Text("Delete data")
             } footer: {
-                Text(
-                    "Resetting restores a fresh default compliance rule. It does not revoke location permission "
-                        + "in iOS Settings or remove report copies you shared elsewhere."
-                )
+                Text("Does not revoke iOS location access or delete shared reports.")
             }
         }
         .navigationTitle("Privacy & Data")
@@ -107,19 +147,27 @@ struct PrivacyDataView: View {
             Button("Cancel", role: .cancel) {}
 
             Button("Delete All Data", role: .destructive) {
-                resetUserData()
+                Task { await resetUserData() }
             }
             .accessibilityIdentifier("privacyData.confirmDeleteAll")
         } message: {
             Text(
-                "This permanently deletes attendance, leave, notes, manual overrides, compliance settings, "
-                    + "custom excluded days, saved home and office locations, stored location events, custom "
-                    + "holiday edits, and generated reports from this device."
+                "Deletes all Work Track records, settings, locations, events, exports and plans from this device. "
+                    + "Automatic Attendance and reminders are turned off. This cannot be undone."
             )
         }
     }
 
-    private func resetUserData() {
+    private func updatePrivacyLock(_ shouldEnable: Bool) {
+        Task {
+            await privacyLockService.setEnabled(shouldEnable)
+        }
+    }
+
+    private func resetUserData() async {
+        locationTrackingService.setAutomaticTrackingEnabled(false, for: [])
+        await reviewReminderService.cancelWeeklyReminder()
+
         do {
             try dataManagementService.resetUserData(in: modelContext)
             resetResult = .success
@@ -136,7 +184,7 @@ private enum ResetResult {
     var message: String {
         switch self {
         case .success:
-            "On-device data was deleted and default settings were restored."
+            "All on-device data was deleted. Automation and reminders are off."
         case .failure:
             "Work Track could not delete all on-device data. Try again."
         }
@@ -166,4 +214,6 @@ private enum ResetResult {
         PrivacyDataView()
     }
     .modelContainer(PreviewData.modelContainer())
+    .environment(AppPrivacyLockService())
+    .environment(LocationTrackingService())
 }

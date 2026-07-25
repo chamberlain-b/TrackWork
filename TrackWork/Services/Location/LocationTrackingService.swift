@@ -13,21 +13,38 @@ final class LocationTrackingService: NSObject {
         case failed(String)
     }
 
-    static let regionIdentifierPrefix = "worktrack.place"
+    nonisolated static let regionIdentifierPrefix = "worktrack.place"
+    nonisolated static let automationPreferenceKey = "location.automaticAttendance.isEnabled"
 
     private let locationManager: CLLocationManager
-    private let automaticBackgroundTrackingEnabled: Bool
+    private let defaults: UserDefaults
+    private let automationPreferenceKey: String
     private var modelContext: ModelContext?
     private var monitoredPlaceSnapshots: [String: MonitoredPlaceSnapshot] = [:]
+    private var lastConfiguredPlaces: [Place] = []
+    private var hasConfiguredPlaces = false
+    private var pendingRegionEvents: [PendingRegionEvent] = []
 
+    private(set) var isAutomaticTrackingEnabled: Bool
+    private(set) var authorizationStatus: CLAuthorizationStatus
     private(set) var trackingStatus: TrackingStatus = .idle
 
     init(
         locationManager: CLLocationManager = CLLocationManager(),
-        automaticBackgroundTrackingEnabled: Bool = false
+        defaults: UserDefaults = .standard,
+        automationPreferenceKey: String = LocationTrackingService.automationPreferenceKey,
+        automaticBackgroundTrackingEnabled: Bool? = nil,
+        isUITesting: Bool? = nil
     ) {
         self.locationManager = locationManager
-        self.automaticBackgroundTrackingEnabled = automaticBackgroundTrackingEnabled
+        self.defaults = defaults
+        self.automationPreferenceKey = automationPreferenceKey
+        self.authorizationStatus = locationManager.authorizationStatus
+
+        let shouldBypassAutomation = isUITesting ?? AppLaunchConfiguration.isUITesting
+        let storedPreference = automaticBackgroundTrackingEnabled
+            ?? defaults.bool(forKey: automationPreferenceKey)
+        self.isAutomaticTrackingEnabled = storedPreference && !shouldBypassAutomation
         super.init()
         self.locationManager.delegate = self
     }
@@ -35,7 +52,7 @@ final class LocationTrackingService: NSObject {
     var statusDescription: String {
         switch trackingStatus {
         case .idle:
-            "Tracking is not active yet."
+            isAutomaticTrackingEnabled ? "Waiting for active saved places." : "Automatic attendance is off."
         case .unavailable(let message), .permissionNeeded(let message), .failed(let message):
             message
         case .monitoring(let count):
@@ -45,16 +62,22 @@ final class LocationTrackingService: NSObject {
 
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        flushPendingRegionEvents()
     }
 
     func refreshMonitoring(for places: [Place]) {
-        guard automaticBackgroundTrackingEnabled else {
+        lastConfiguredPlaces = places
+        hasConfiguredPlaces = true
+        authorizationStatus = locationManager.authorizationStatus
+
+        guard isAutomaticTrackingEnabled else {
             stopWorkTrackRegions()
-            trackingStatus = .unavailable("Background tracking is unavailable in this MVP build.")
+            trackingStatus = .idle
             return
         }
 
         guard CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else {
+            closeOpenVisits()
             stopWorkTrackRegions()
             trackingStatus = .unavailable("Geofence monitoring is not available on this device.")
             return
@@ -62,6 +85,7 @@ final class LocationTrackingService: NSObject {
 
         let authorizationStatus = locationManager.authorizationStatus
         guard authorizationStatus == .authorizedAlways else {
+            closeOpenVisits()
             stopWorkTrackRegions()
             trackingStatus = .permissionNeeded(permissionMessage(for: authorizationStatus))
             return
@@ -69,20 +93,38 @@ final class LocationTrackingService: NSObject {
 
         let activePlaces = selectedMonitorablePlaces(from: places)
         guard !activePlaces.isEmpty else {
+            closeOpenVisits()
             stopWorkTrackRegions()
             trackingStatus = .idle
             return
         }
 
+        guard !Self.hasAmbiguousOverlap(in: activePlaces) else {
+            closeOpenVisits()
+            stopWorkTrackRegions()
+            trackingStatus = .failed(
+                "The active home and office areas overlap. Reduce a radius or move a saved area "
+                    + "before enabling automation."
+            )
+            return
+        }
+
+        synchronizeMonitoring(for: activePlaces)
+    }
+
+    private func synchronizeMonitoring(for activePlaces: [Place]) {
         let maximumDistance = locationManager.maximumRegionMonitoringDistance
         let desiredRegions = activePlaces.compactMap { place in
             Self.makeRegion(for: place, maximumMonitoringDistance: maximumDistance)
         }
         let desiredIdentifiers = Set(desiredRegions.map(\.identifier))
 
-        locationManager.monitoredRegions
-            .filter { $0.identifier.hasPrefix(Self.regionIdentifierPrefix) && !desiredIdentifiers.contains($0.identifier) }
-            .forEach(locationManager.stopMonitoring(for:))
+        let regionsToStop = locationManager.monitoredRegions.filter {
+                $0.identifier.hasPrefix(Self.regionIdentifierPrefix)
+                    && !desiredIdentifiers.contains($0.identifier)
+            }
+        closeOpenVisits(for: Set(regionsToStop.map(\.identifier)))
+        regionsToStop.forEach(locationManager.stopMonitoring(for:))
 
         monitoredPlaceSnapshots = Dictionary(
             uniqueKeysWithValues: activePlaces.map { place in
@@ -98,13 +140,109 @@ final class LocationTrackingService: NSObject {
         )
 
         for region in desiredRegions {
-            if let existingRegion = locationManager.monitoredRegions.first(where: { $0.identifier == region.identifier }) {
+            if let existingRegion = locationManager.monitoredRegions.first(
+                where: { $0.identifier == region.identifier }
+            ),
+               Self.region(existingRegion, matches: region) {
+                continue
+            }
+
+            if let existingRegion = locationManager.monitoredRegions.first(
+                where: { $0.identifier == region.identifier }
+            ) {
+                closeOpenVisits(for: [existingRegion.identifier])
                 locationManager.stopMonitoring(for: existingRegion)
             }
             locationManager.startMonitoring(for: region)
+            locationManager.requestState(for: region)
         }
 
         trackingStatus = .monitoring(desiredRegions.count)
+    }
+
+    @discardableResult
+    func setAutomaticTrackingEnabled(_ enabled: Bool, for places: [Place]) -> Bool {
+        lastConfiguredPlaces = places
+        authorizationStatus = locationManager.authorizationStatus
+
+        guard enabled else {
+            closeOpenVisits()
+            defaults.set(false, forKey: automationPreferenceKey)
+            isAutomaticTrackingEnabled = false
+            stopWorkTrackRegions()
+            trackingStatus = .idle
+            return true
+        }
+
+        guard authorizationStatus == .authorizedAlways else {
+            trackingStatus = .permissionNeeded(permissionMessage(for: authorizationStatus))
+            return false
+        }
+
+        let activePlaces = selectedMonitorablePlaces(from: places)
+        guard !activePlaces.isEmpty else {
+            trackingStatus = .permissionNeeded("Save and enable a home or office place before turning on automation.")
+            return false
+        }
+
+        guard !Self.hasAmbiguousOverlap(in: activePlaces) else {
+            trackingStatus = .failed(
+                "The active home and office areas overlap. Reduce a radius or move a saved area "
+                    + "before enabling automation."
+            )
+            return false
+        }
+
+        defaults.set(true, forKey: automationPreferenceKey)
+        isAutomaticTrackingEnabled = true
+        refreshMonitoring(for: places)
+
+        if case .monitoring = trackingStatus {
+            return true
+        }
+        return false
+    }
+
+    func refreshAuthorizationStatus() {
+        authorizationStatus = locationManager.authorizationStatus
+        if isAutomaticTrackingEnabled {
+            refreshMonitoring(for: lastConfiguredPlaces)
+        }
+    }
+
+    func reseedCurrentRegionStates() {
+        guard isAutomaticTrackingEnabled, authorizationStatus == .authorizedAlways else {
+            return
+        }
+
+        locationManager.monitoredRegions
+            .filter { $0.identifier.hasPrefix(Self.regionIdentifierPrefix) }
+            .forEach(locationManager.requestState(for:))
+    }
+
+    func requestForegroundAuthorizationForAutomation() {
+        authorizationStatus = locationManager.authorizationStatus
+        guard authorizationStatus == .notDetermined else {
+            return
+        }
+
+        trackingStatus = .permissionNeeded(
+            "First allow location while using Work Track. You can then choose background access "
+                + "for automatic attendance."
+        )
+        locationManager.requestWhenInUseAuthorization()
+    }
+
+    func requestAlwaysAuthorizationForAutomation() {
+        authorizationStatus = locationManager.authorizationStatus
+        guard authorizationStatus == .authorizedWhenInUse else {
+            return
+        }
+
+        trackingStatus = .permissionNeeded(
+            "Choose Always in the iOS prompt so saved-place boundary events can arrive when Work Track is closed."
+        )
+        locationManager.requestAlwaysAuthorization()
     }
 
     static func makeRegion(for place: Place, maximumMonitoringDistance: CLLocationDistance) -> CLCircularRegion? {
@@ -143,6 +281,45 @@ final class LocationTrackingService: NSObject {
         return UUID(uuidString: String(components[3]))
     }
 
+    static func region(_ existing: CLRegion, matches desired: CLCircularRegion) -> Bool {
+        guard let existing = existing as? CLCircularRegion else {
+            return false
+        }
+
+        return abs(existing.center.latitude - desired.center.latitude) < 0.000_001
+            && abs(existing.center.longitude - desired.center.longitude) < 0.000_001
+            && abs(existing.radius - desired.radius) < 0.5
+            && existing.notifyOnEntry == desired.notifyOnEntry
+            && existing.notifyOnExit == desired.notifyOnExit
+    }
+
+    static func hasAmbiguousOverlap(in places: [Place]) -> Bool {
+        let activePlaces = places.filter { $0.isActive && $0.type != nil }
+
+        for (index, firstPlace) in activePlaces.enumerated() {
+            for secondPlace in activePlaces.dropFirst(index + 1) {
+                guard firstPlace.type != secondPlace.type else {
+                    continue
+                }
+
+                let firstLocation = CLLocation(
+                    latitude: firstPlace.latitude,
+                    longitude: firstPlace.longitude
+                )
+                let secondLocation = CLLocation(
+                    latitude: secondPlace.latitude,
+                    longitude: secondPlace.longitude
+                )
+                if firstLocation.distance(from: secondLocation)
+                    < firstPlace.radiusMeters + secondPlace.radiusMeters {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
     private func selectedMonitorablePlaces(from places: [Place]) -> [Place] {
         var selectedPlacesByType: [PlaceType: Place] = [:]
 
@@ -163,76 +340,118 @@ final class LocationTrackingService: NSObject {
         monitoredPlaceSnapshots = [:]
     }
 
-    private func persistEvent(for region: CLRegion, kind: LocationEventKind) {
-        guard region.identifier.hasPrefix(Self.regionIdentifierPrefix) else {
+    private func closeOpenVisits(
+        for regionIdentifiers: Set<String>? = nil,
+        at occurredAt: Date = .now
+    ) {
+        guard let modelContext,
+              let events = try? modelContext.fetch(FetchDescriptor<LocationEvent>()) else {
             return
         }
 
-        guard let placeType = Self.placeType(from: region.identifier) else {
+        let openEntries = LocationVisitResolver().openEntries(from: events).filter { entry in
+            regionIdentifiers?.contains(entry.regionIdentifier) ?? true
+        }
+        for entry in openEntries {
+            persistEvent(
+                PendingRegionEvent(
+                    regionIdentifier: entry.regionIdentifier,
+                    kind: .exited,
+                    occurredAt: occurredAt
+                )
+            )
+        }
+    }
+
+    func recordBoundaryEvent(
+        regionIdentifier: String,
+        kind: LocationEventKind,
+        occurredAt: Date = .now
+    ) {
+        guard isAutomaticTrackingEnabled else {
+            return
+        }
+
+        let pendingEvent = PendingRegionEvent(
+            regionIdentifier: regionIdentifier,
+            kind: kind,
+            occurredAt: occurredAt
+        )
+
+        guard modelContext != nil else {
+            pendingRegionEvents.append(pendingEvent)
+            return
+        }
+
+        persistEvent(pendingEvent)
+    }
+
+    private func persistEvent(for region: CLRegion, kind: LocationEventKind) {
+        recordBoundaryEvent(regionIdentifier: region.identifier, kind: kind)
+    }
+
+    private func persistEvent(_ pendingEvent: PendingRegionEvent) {
+        guard pendingEvent.regionIdentifier.hasPrefix(Self.regionIdentifierPrefix) else {
+            return
+        }
+
+        guard let placeType = Self.placeType(from: pendingEvent.regionIdentifier) else {
             trackingStatus = .failed("Received a geofence event with an unknown place type.")
             return
         }
 
-        let placeId = Self.placeId(from: region.identifier)
-        let snapshot = monitoredPlaceSnapshots[region.identifier]
+        guard let modelContext else {
+            pendingRegionEvents.append(pendingEvent)
+            return
+        }
+
+        do {
+            let existingEvents = try modelContext.fetch(FetchDescriptor<LocationEvent>())
+            let isDuplicate = existingEvents.contains { event in
+                event.regionIdentifier == pendingEvent.regionIdentifier
+                    && event.eventKind == pendingEvent.kind
+                    && abs(event.occurredAt.timeIntervalSince(pendingEvent.occurredAt)) < 60
+            }
+            guard !isDuplicate else {
+                return
+            }
+        } catch {
+            trackingStatus = .failed("Location event could not be checked before saving.")
+            return
+        }
+
+        let placeId = Self.placeId(from: pendingEvent.regionIdentifier)
+        let snapshot = monitoredPlaceSnapshots[pendingEvent.regionIdentifier]
         let event = LocationEvent(
             placeId: placeId,
             placeName: snapshot?.placeName ?? placeType.displayName,
             placeType: snapshot?.placeType ?? placeType,
-            eventKind: kind,
-            regionIdentifier: region.identifier
+            eventKind: pendingEvent.kind,
+            regionIdentifier: pendingEvent.regionIdentifier,
+            occurredAt: pendingEvent.occurredAt
         )
-
-        guard let modelContext else {
-            trackingStatus = .failed("Location event could not be saved because storage is not ready.")
-            return
-        }
-
         modelContext.insert(event)
 
         do {
-            try recalculateAttendance(for: event, in: modelContext)
+            try AutomatedAttendanceEventProcessor().recalculateAttendance(
+                affectedBy: event,
+                in: modelContext
+            )
             try modelContext.save()
         } catch {
+            modelContext.rollback()
             trackingStatus = .failed("Location event could not be saved.")
         }
     }
 
-    private func recalculateAttendance(for event: LocationEvent, in modelContext: ModelContext) throws {
-        let calendar = Calendar.current
-        let affectedDate = calendar.startOfDay(for: event.occurredAt)
-        var attendanceDays = try modelContext.fetch(FetchDescriptor<AttendanceDay>())
-
-        if !attendanceDays.contains(where: { calendar.startOfDay(for: $0.date) == affectedDate }) {
-            let attendanceDay = AttendanceDay(date: affectedDate)
-            modelContext.insert(attendanceDay)
-            attendanceDays.append(attendanceDay)
+    private func flushPendingRegionEvents() {
+        guard modelContext != nil, !pendingRegionEvents.isEmpty else {
+            return
         }
 
-        let locationEvents = try modelContext.fetch(FetchDescriptor<LocationEvent>())
-        let leaveRecords = try modelContext.fetch(FetchDescriptor<LeaveRecord>())
-        let publicHolidays = try modelContext.fetch(FetchDescriptor<PublicHoliday>())
-        let customExcludedDays = try modelContext.fetch(FetchDescriptor<CustomExcludedDay>())
-        let rule = try modelContext.fetch(FetchDescriptor<ComplianceRule>()).first
-        let activeJurisdictionId = rule?.jurisdictionId ?? "AU-VIC"
-        let applicablePublicHolidays = ActiveJurisdictionHolidayResolver.holidays(
-            from: publicHolidays,
-            jurisdictionId: activeJurisdictionId
-        )
-        let inferenceService = AttendanceInferenceService(
-            calendar: calendar,
-            minimumOfficeMinutes: rule?.minimumOfficeMinutes ?? 180
-        )
-
-        inferenceService.recalculateAttendanceDays(
-            attendanceDays,
-            affectedDates: [affectedDate],
-            events: locationEvents,
-            leaveRecords: leaveRecords,
-            publicHolidays: applicablePublicHolidays,
-            customExcludedDays: customExcludedDays,
-            selectedISOWeekdays: Set(rule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
-        )
+        let queuedEvents = pendingRegionEvents
+        pendingRegionEvents.removeAll()
+        queuedEvents.forEach(persistEvent)
     }
 
     private func permissionMessage(for authorizationStatus: CLAuthorizationStatus) -> String {
@@ -244,7 +463,8 @@ final class LocationTrackingService: NSObject {
         case .denied:
             "Location access is off for Work Track. Manual attendance still works."
         case .authorizedWhenInUse:
-            "Background location access is needed for geofence events when the app is not open. Manual attendance still works."
+            "Background location access is needed for geofence events when the app is not open. "
+                + "Manual attendance still works."
         case .authorizedAlways:
             "Location tracking is ready."
         @unknown default:
@@ -256,7 +476,14 @@ final class LocationTrackingService: NSObject {
 extension LocationTrackingService: CLLocationManagerDelegate {
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            trackingStatus = .permissionNeeded(permissionMessage(for: manager.authorizationStatus))
+            authorizationStatus = manager.authorizationStatus
+            if isAutomaticTrackingEnabled, hasConfiguredPlaces {
+                refreshMonitoring(for: lastConfiguredPlaces)
+            } else if authorizationStatus == .authorizedAlways {
+                trackingStatus = .idle
+            } else {
+                trackingStatus = .permissionNeeded(permissionMessage(for: authorizationStatus))
+            }
         }
     }
 
@@ -272,7 +499,25 @@ extension LocationTrackingService: CLLocationManagerDelegate {
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
+    nonisolated func locationManager(
+        _ manager: CLLocationManager,
+        didDetermineState state: CLRegionState,
+        for region: CLRegion
+    ) {
+        guard state == .inside else {
+            return
+        }
+
+        Task { @MainActor in
+            persistEvent(for: region, kind: .entered)
+        }
+    }
+
+    nonisolated func locationManager(
+        _ manager: CLLocationManager,
+        monitoringDidFailFor region: CLRegion?,
+        withError error: Error
+    ) {
         Task { @MainActor in
             if let region {
                 trackingStatus = .failed("Monitoring failed for \(region.identifier). Manual attendance still works.")
@@ -287,4 +532,10 @@ private struct MonitoredPlaceSnapshot {
     let placeId: UUID
     let placeName: String
     let placeType: PlaceType
+}
+
+private struct PendingRegionEvent {
+    let regionIdentifier: String
+    let kind: LocationEventKind
+    let occurredAt: Date
 }

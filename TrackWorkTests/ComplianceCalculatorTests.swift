@@ -37,6 +37,7 @@ final class ComplianceCalculatorTests: XCTestCase {
         XCTAssertEqual(summary.baseEligibleDays, 23)
         XCTAssertEqual(summary.adjustedEligibleDays, 19)
         XCTAssertEqual(summary.requiredOfficeDays, 10)
+        XCTAssertEqual(summary.officeDaysNeeded, 10)
     }
 
     func testFixedRequirementProratesForLeaveByDefault() {
@@ -170,6 +171,7 @@ final class ComplianceCalculatorTests: XCTestCase {
         let summary = calculator.calculate(input)
 
         XCTAssertEqual(summary.completedOfficeDays, 2)
+        XCTAssertEqual(summary.officeDaysNeeded, 10)
     }
 
     func testCompletedMixedDaysUseConfiguredMinimumOfficeMinutes() {

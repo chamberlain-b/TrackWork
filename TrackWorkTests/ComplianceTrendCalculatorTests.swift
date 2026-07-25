@@ -70,16 +70,16 @@ final class ComplianceTrendCalculatorTests: XCTestCase {
     func testTrendBucketBoundariesAreInclusiveAndCalendarAligned() throws {
         let referenceDate = date("2026-07-15")
         let rule = ComplianceRule(requirementType: .fixedMonthlyDays, fixedRequiredDays: 10)
-        let expectations: [(ComplianceTrendGranularity, String, String)] = [
-            (.monthly, "2026-07-01", "2026-07-31"),
-            (.quarterly, "2026-07-01", "2026-09-30"),
-            (.yearly, "2026-01-01", "2026-12-31")
+        let expectations = [
+            TrendRangeExpectation(.monthly, start: "2026-07-01", end: "2026-07-31"),
+            TrendRangeExpectation(.quarterly, start: "2026-07-01", end: "2026-09-30"),
+            TrendRangeExpectation(.yearly, start: "2026-01-01", end: "2026-12-31")
         ]
 
-        for (granularity, expectedStart, expectedEnd) in expectations {
+        for expectation in expectations {
             let point = try XCTUnwrap(
                 calculator.points(
-                    granularity: granularity,
+                    granularity: expectation.granularity,
                     endingAt: referenceDate,
                     bucketCount: 1,
                     calendar: calendar,
@@ -91,9 +91,38 @@ final class ComplianceTrendCalculatorTests: XCTestCase {
                 ).first
             )
 
-            XCTAssertEqual(point.range.start, date(expectedStart), granularity.rawValue)
-            XCTAssertEqual(point.range.end, date(expectedEnd), granularity.rawValue)
+            XCTAssertEqual(point.range.start, date(expectation.start), expectation.granularity.rawValue)
+            XCTAssertEqual(point.range.end, date(expectation.end), expectation.granularity.rawValue)
         }
+    }
+
+    func testMonthlyBucketsUseRuleEffectiveAtEachBucketEnd() {
+        let legacyRule = ComplianceRule(
+            name: "Legacy target",
+            requirementType: .fixedMonthlyDays,
+            fixedRequiredDays: 4
+        )
+        let julyRule = ComplianceRule(
+            name: "July target",
+            requirementType: .fixedMonthlyDays,
+            fixedRequiredDays: 9,
+            effectiveFrom: date("2026-07-01")
+        )
+
+        let points = calculator.points(
+            granularity: .monthly,
+            endingAt: date("2026-07-15"),
+            bucketCount: 2,
+            calendar: calendar,
+            rules: [julyRule, legacyRule],
+            attendanceDays: [],
+            leaveRecords: [],
+            publicHolidays: [],
+            customExcludedDays: []
+        )
+
+        XCTAssertEqual(points.map(\.range.start), [date("2026-06-01"), date("2026-07-01")])
+        XCTAssertEqual(points.map(\.requiredOfficeDays), [4, 9])
     }
 
     private func attendance(_ isoDate: String) -> AttendanceDay {
@@ -123,5 +152,17 @@ final class ComplianceTrendCalculatorTests: XCTestCase {
         }
 
         return date
+    }
+}
+
+private struct TrendRangeExpectation {
+    let granularity: ComplianceTrendGranularity
+    let start: String
+    let end: String
+
+    init(_ granularity: ComplianceTrendGranularity, start: String, end: String) {
+        self.granularity = granularity
+        self.start = start
+        self.end = end
     }
 }

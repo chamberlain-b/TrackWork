@@ -254,7 +254,7 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - No continuous GPS tracking is started by simply opening setup.
 - Location setup does not overwrite manual attendance, leave, public holiday, or note data.
 
-## 14. Location Permission Is Deferred
+## 14. Location Permissions Are Contextual
 
 ### Steps
 
@@ -266,15 +266,22 @@ ceil(adjustedEligibleDays * requiredPercentage)
 6. Choose Use Current Location and review the in-app explanation before continuing.
 7. Continue, grant When In Use or Allow Once access, and wait for the selected address to appear.
 8. Repeat after resetting permission, deny access, and confirm address search and map selection remain available.
+9. Return to Settings > Automatic Attendance with at least one active saved place.
+10. Review the explanation, choose Allow Location While Using First, and handle the first iOS prompt.
+11. Confirm the next action explicitly offers background access; continue and handle the Always prompt.
+12. Enable Automatic Attendance, leave and re-enter a simulated saved area, then review Location Events and the affected day.
+13. Turn Automatic Attendance off and confirm monitored saved areas stop without deleting existing attendance.
 
 ### Expected Results
 
 - When In Use authorization is requested only after the explicit current-location action and explanation.
-- The app never requests Always authorization.
 - Current location performs one selection request and does not keep updates running.
 - Denial produces a useful fallback instead of blocking saved-place editing or manual attendance.
-- Location-based inference remains disabled.
-- The app does not enable background location mode, geofence monitoring, or continuous GPS tracking.
+- Always authorization is requested only from the dedicated Automatic Attendance screen, after the user has seen the value and granted or reviewed foreground access.
+- Enabling automation monitors only active saved home/office boundaries and records derived entry/exit events without sampled event coordinates or route history.
+- The app does not start continuous GPS updates.
+- Leave, public holidays, custom exclusions, and manual corrections remain authoritative when location events arrive.
+- Turning automation off stops the app's saved-region monitoring and leaves manual attendance and one-shot Check In available.
 
 ## 15. Privacy Checks: No Raw GPS Export By Default
 
@@ -305,6 +312,7 @@ ceil(adjustedEligibleDays * requiredPercentage)
 2. Select current month, last 30 days, previous month, current quarter, previous quarter, and year to date.
 3. For each preset, record the displayed inclusive start and end dates.
 4. Select Custom, choose an end date before the start date, and leave the controls.
+5. Create two saved rules with different effective months, then select a custom range that begins under the earlier rule and ends under the later rule.
 
 ### Expected Results
 
@@ -314,20 +322,22 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - Year to date begins on January 1 and ends today.
 - A reversed custom range is normalized so the earlier date is the start.
 - Compliance, History, and Export show the same records and boundaries.
+- A range spanning a rule change uses the saved rule effective on the inclusive range end.
 
 ## 17. Monthly, Quarterly, And Yearly Trends
 
 ### Steps
 
 1. Prepare attendance, leave, and custom exclusions in more than one month.
-2. Open Summary and switch the trend granularity between Monthly, Quarterly, and Yearly.
-3. Compare each visible bucket with the same dates selected in Compliance.
+2. Save a rule change effective at the start of one of those months.
+3. Open Summary and switch the trend granularity between Monthly, Quarterly, and Yearly.
+4. Compare each visible bucket with the same dates selected in Compliance.
 
 ### Expected Results
 
 - All three trend granularities are selectable.
 - Empty buckets remain visible rather than collapsing the timeline.
-- Completed and required office days match direct period evaluation using the saved rule.
+- Completed and required office days match direct period evaluation using the rule effective at each bucket's end.
 - Holidays, leave, and custom exclusions have the same effect in trend and period calculations.
 
 ## 18. Custom Excluded Day
@@ -347,20 +357,28 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - Weekend, holiday, leave, and duplicate exclusions do not double-reduce eligibility.
 - App and export totals agree and exports contain a dedicated custom-exclusion section.
 
-## 19. Holiday Coverage And Missing-Year Recovery
+## 19. Supported And Unsupported Holiday Ranges
 
 ### Steps
 
-1. Select each supported AU and NZ jurisdiction while viewing dates in 2026.
+1. Select each supported AU and NZ jurisdiction while viewing dates in 2026 and 2027.
 2. For an NZ region, verify both national and regional observed holidays.
-3. Navigate to a period outside the bundled 2026 holiday horizon.
+3. Navigate Calendar to a month before 2026 or after 2027.
+4. In History and Compliance, select a custom range that includes at least one unsupported year.
+5. Select the same unsupported custom range in Export and attempt to generate both formats.
+6. If testing with the device calendar year outside 2026–2027, relaunch the app and record the launch alert.
 
 ### Expected Results
 
-- Every catalog jurisdiction loads verified 2026 holidays with official source metadata.
+- Every catalog jurisdiction loads verified 2026 and 2027 holidays with official source metadata.
+- Victoria's 24 September 2027 AFL holiday retains its conditional schedule note for the final pre-submission recheck.
 - Only the active jurisdiction affects Calendar, Compliance, History, inference, and Export.
 - NZ regional calendars include inherited national holidays.
-- Missing-year data produces a visible typed error and never silently assumes zero holidays.
+- Supported 2026–2027 ranges show no coverage warning.
+- Calendar, History, and Compliance name the unsupported year or years and state the supported 2026–2027 horizon.
+- Export explains the unsupported coverage, disables generation, and creates no PDF or CSV for that range.
+- An unsupported current calendar year produces a launch alert after bundled-year synchronization.
+- Missing-year data never silently assumes zero holidays.
 
 ## 20. Privacy Disclosure And Confirmed Reset
 
@@ -377,23 +395,162 @@ ceil(adjustedEligibleDays * requiredPercentage)
 - Copy accurately states that app-managed data is on-device, Apple Maps handles user-initiated place lookup, and shared copies are controlled by their destination.
 - Cancellation is non-destructive.
 - Confirmation removes all user-owned records, user-edited holidays, and managed temporary reports.
+- Planned office dates and raw location events are removed, Automatic Attendance and the weekly reminder are turned off, and monitored saved regions stop.
 - Bundled holiday reference data remains available.
 - Exactly one default compliance rule is restored.
 - The action does not claim to revoke iOS permissions or delete copies shared elsewhere.
 
-## 21. Release Regression Gate
+## 21. Backup, App Lock, Reminder, And Shortcut Controls
+
+### Steps
+
+1. Export a standard portable backup and inspect the JSON for saved addresses, coordinates, and location events.
+2. Export a full private backup after reviewing its warning and confirm the sensitive location domains are present.
+3. Restore a validated backup with Merge, then with Replace; repeat with a corrupt or unsupported file.
+4. Enable App Lock, background and foreground the app, authenticate, then cancel authentication once.
+5. Enable and disable the weekly reminder, including notification-denied behavior.
+6. Run the Record Today and Review Pending Days App Shortcuts and confirm each opens a reviewable in-app flow rather than silently saving.
+
+### Expected Results
+
+- Standard backup excludes places, addresses, coordinates, and raw location events; standard Replace preserves the local location domains it does not represent.
+- Full private export requires an explicit warning and the copy states that Work Track does not encrypt the exported JSON.
+- Import validates before mutation, Merge preserves local-only records, Replace matches represented domains, and invalid files leave the store unchanged.
+- App Lock obscures the app switcher and keeps content covered until successful device-owner authentication; UI testing is not trapped by the system sheet.
+- Reminder permission is requested only after the in-context toggle and notification text contains no attendance, location, date, compliance, or pending-count details.
+- App Shortcuts hand off to editable review screens and require an explicit Save.
+
+## 22. Review Queue Lifecycle
+
+### Steps
+
+1. In the current month, leave two earlier eligible workdays unconfirmed.
+2. Also prepare a confirmed day, a weekend, an active-jurisdiction holiday, a leave day, a custom exclusion, today, and a future workday.
+3. Open Summary > Review Days and note the first date and the waiting count.
+4. Open Review next day, confirm it as Office or Home, save, and return to the queue.
+5. Confirm the remaining waiting day, then leave and reopen Review Days.
+
+### Expected Results
+
+- Only earlier eligible workdays without a non-unknown final status appear, in chronological order.
+- Confirmed days, weekends, holidays, leave, custom exclusions, today, and future dates do not appear.
+- Saving a final status removes that date automatically and advances Review next day.
+- Completing the queue produces the All caught up state, which remains correct after reopening the screen.
+
+## 23. Office Plan Persistence And Removal
+
+### Steps
+
+1. Open Summary > Plan Office Days for a month with several upcoming eligible workdays.
+2. Select one date manually and use Suggest earliest eligible days for the remaining target.
+3. Leave the screen, relaunch the app, and reopen the same month.
+4. Turn one planned date off and verify the change after reopening.
+5. Save final attendance for another planned date from Day Detail or apply a matching Quick Check In.
+6. Use Clear this month's plan.
+
+### Expected Results
+
+- Plans are offered only for eligible, non-leave, non-excluded dates from today onward that have not already completed a qualifying office visit.
+- Selected plans persist across navigation and relaunch and are reflected in the Summary plan count.
+- A plan remains a reminder and does not increase completed attendance or compliance by itself.
+- Turning a plan off, clearing the month, or saving final attendance for that date removes the plan.
+- Suggested dates do not duplicate existing plans and stop when the remaining target is covered or no candidate remains.
+
+## 24. History Search, Filter, And Day-Detail Deep Link
+
+### Steps
+
+1. Prepare records in one supported period for attendance, leave, a manual override, a public holiday, a custom exclusion, and a distinctive note.
+2. Open History and select that period.
+3. Search separately by status, distinctive note text, and a visible formatted date.
+4. Exercise All records, Attendance, Leave, Manual overrides, and Holidays & exclusions, including one search-and-filter combination.
+5. Tap a result, verify the matching Day Detail opens, edit and save it, then return to History.
+6. Choose a period with no records and use Review days in Calendar.
+
+### Expected Results
+
+- Search is case-insensitive and matches visible date, final status, detected status, or note text.
+- Each filter includes records matching its category, and search narrows the active filter rather than replacing it.
+- Pending unconfirmed dates do not appear as records until they are saved.
+- A result opens the correct date and preserves its attendance, leave, exclusion, holiday, note, and override context.
+- Saved edits are reflected when returning to History, and the empty-state action opens Calendar.
+
+## 25. Quick Check In And Manual Preservation
+
+### Steps
+
+1. Save active, non-overlapping home and office areas and keep Automatic Attendance off.
+2. Give today an existing manual Home or Office final status and, separately, prepare a case protected by leave, holiday, or custom exclusion.
+3. Open Location Setup > Check In from Current Location and choose Use Current Location Once.
+4. Review the detected saved-place result before tapping Apply to Today.
+5. Apply the result and inspect today's detected status, final status, and Location Events.
+6. Repeat with a sample outside both areas, overlapping areas, and denied foreground permission where practical.
+
+### Expected Results
+
+- Permission is requested only after the explicit one-shot action, and Automatic Attendance remains off.
+- The sampled coordinate is discarded after classification and no raw boundary event is created by Quick Check In.
+- Nothing changes until Apply to Today is tapped.
+- A matched result updates detected attendance while preserving an existing manual final status, leave, holiday, or custom exclusion.
+- Outside, ambiguous, invalid, or denied samples explain the fallback and do not change attendance.
+- Manual Calendar editing remains available in every outcome.
+
+## 26. Clear Raw Location Events Without Clearing Attendance
+
+### Steps
+
+1. Create a completed automatic home or office visit and verify its derived attendance result.
+2. Open Settings > Location Events and review the full stored entry/exit list.
+3. Tap Clear, cancel once, and verify the events remain.
+4. Repeat, confirm Clear Events, and reopen both Location Events and the affected Calendar day.
+
+### Expected Results
+
+- Every stored on-device boundary event is reviewable with place, kind, and timestamp, without sampled coordinates.
+- Cancellation is non-destructive.
+- Confirmation removes the existing raw entry/exit history while retaining already-derived attendance and manual corrections.
+- If the device is currently inside a monitored area, state reseeding may create a new current entry after the clear; it must not restore the deleted history.
+- The retained attendance remains editable manually and default exports still omit raw events.
+
+## 27. Physical-Device Background And Terminated Geofence Delivery
+
+### Steps
+
+1. Install the release candidate on a physical iPhone and record its model, iOS version, battery state, location settings, and Background App Refresh state.
+2. Save active, non-overlapping home and office areas, grant Always access through Automatic Attendance, and turn automation on.
+3. Cross an office boundary with the app backgrounded, allow time for iOS delivery, cross it again to exit, then review Location Events and the affected day.
+4. Repeat after the process has been terminated by the system or stopped from Xcode without swiping the app away, then reopen it after the boundary transitions.
+5. Repeat for the home region and verify its events remain paired independently from the office region.
+6. Downgrade permission to When In Use or Denied, then turn automation off while a visit is open.
+7. Separately document the user force-quit case; relaunch before expecting region events again.
+
+### Expected Results
+
+- Simulator-only results do not satisfy this flow; background and terminated delivery is evidenced on the physical device.
+- Location Services, Always access, and Background App Refresh are enabled for the passing run; power or accuracy conditions that delay delivery are recorded.
+- Background and system-terminated entry/exit callbacks are stored, reviewable, and converted into the expected derived attendance when iOS delivers them.
+- Home and office visits pair by monitored region, duplicate callbacks do not duplicate events, and a newer entry repairs a missed exit.
+- Non-positive or longer-than-18-hour pairs do not contribute attendance, and overlapping active home/office areas cannot enable automation.
+- Permission loss, region replacement, unavailable monitoring, or turning automation off explicitly closes open visits before monitoring stops.
+- Manual attendance remains available when delivery is delayed or permission is insufficient.
+- A user force-quit is outside the supported terminated-delivery claim; its observed behavior is recorded separately and the app is relaunched before subsequent delivery is judged.
+- No continuous GPS updates, coordinates, or route history are created.
+
+## 28. Release Regression Gate
 
 ### Steps
 
 1. Run the full TrackWorkTests target.
 2. Run TrackWorkUITests serially on an iOS 27 simulator.
 3. Build Debug and Release and run static analysis.
-4. Inspect the app icon, privacy manifest, bundle identifier, version/build, and category.
+4. Complete the physical-device geofence flow above and retain its evidence.
+5. Inspect the app icon, privacy manifest, bundle identifier, version/build, and category.
 
 ### Expected Results
 
 - All unit and golden-journey tests pass without skips.
 - Debug, Release, and static-analysis gates succeed.
+- Physical-device background and system-terminated geofence delivery is verified or remains an explicit release blocker.
 - The app targets iPhone and iPad only.
 - The production icon has standard, dark, and tinted variants.
 - The privacy manifest and App Store privacy answers match the no-developer-collection, no-tracking binary and disclosed Apple Maps lookups.

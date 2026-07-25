@@ -1,81 +1,83 @@
 import Charts
 import SwiftUI
 
-struct MonthAtAGlanceSection: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    let eligibleDaysToDate: Int
-    let confirmedDays: Int
-    let officeShareToDate: Double?
-    let officeDaysToDate: Int
-    let reviewDays: Int
+struct UpcomingOfficePlanSection: View {
+    let plannedDates: [Date]
+    let displayedMonth: Date
+    let referenceDate: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("Month at a glance")
-                .font(AppTypography.sectionTitle)
-                .foregroundStyle(Color.ds.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("dashboard.atAGlance")
+        NavigationLink {
+            OfficePlanView(displayedMonth: displayedMonth, referenceDate: referenceDate)
+        } label: {
+            DSCard(includesShadow: false) {
+                VStack(alignment: .leading, spacing: AppSpacing.md) {
+                    HStack {
+                        Label("Office plan", systemImage: "calendar.badge.clock")
+                            .font(AppTypography.cardTitle)
+                            .foregroundStyle(Color.ds.textPrimary)
 
-            LazyVGrid(columns: columns, spacing: AppSpacing.cardGap) {
-                DSMetricTile(
-                    systemImage: "calendar.badge.checkmark",
-                    label: "Eligible to date",
-                    value: eligibleDaysToDate.formatted(),
-                    subtitle: "Through today",
-                    statusColor: Color.ds.info
-                )
+                        Spacer()
 
-                DSMetricTile(
-                    systemImage: "checkmark.circle.fill",
-                    label: "Confirmed",
-                    value: confirmedDays.formatted(),
-                    subtitle: "Final status recorded",
-                    statusColor: confirmationColor
-                )
+                        Image(systemName: "chevron.forward")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.ds.textTertiary)
+                            .accessibilityHidden(true)
+                    }
 
-                DSMetricTile(
-                    systemImage: "building.2.fill",
-                    label: "Office share to date",
-                    value: officeShareToDate?.formatted(
-                        .percent.precision(.fractionLength(0...1))
-                    ) ?? "—",
-                    subtitle: eligibleDaysToDate > 0
-                        ? "\(officeDaysToDate) of \(eligibleDaysToDate) eligible days"
-                        : "No eligible days yet",
-                    statusColor: Color.ds.officeDay
-                )
-                .accessibilityIdentifier("dashboard.officeShareToDate")
+                    Divider()
 
-                DSMetricTile(
-                    systemImage: reviewDays == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                    label: "Needs review",
-                    value: reviewDays.formatted(),
-                    subtitle: reviewDays == 0 ? "All caught up" : "Confirm in Calendar",
-                    statusColor: reviewDays == 0 ? Color.ds.success : Color.ds.warning
-                )
+                    HStack(alignment: .center, spacing: AppSpacing.md) {
+                        Image(systemName: plannedDates.isEmpty ? "calendar.badge.plus" : "building.2.fill")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.ds.accentPrimary)
+                            .frame(width: 44, height: 44)
+                            .background(Color.ds.accentPrimary.opacity(0.1), in: Circle())
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            Text(primaryText)
+                                .font(AppTypography.headline)
+                                .foregroundStyle(Color.ds.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Text(secondaryText)
+                                .font(AppTypography.callout)
+                                .foregroundStyle(Color.ds.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                }
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Office plan")
+        .accessibilityValue("\(primaryText). \(secondaryText)")
+        .accessibilityHint("Opens office-day planning")
+        .accessibilityIdentifier("dashboard.officePlan")
     }
 
-    private var columns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible())]
+    private var primaryText: String {
+        guard let nextDate = plannedDates.first else {
+            return "No office days planned"
         }
 
-        return [
-            GridItem(.flexible(), spacing: AppSpacing.cardGap),
-            GridItem(.flexible())
-        ]
+        return nextDate.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 
-    private var confirmationColor: Color {
-        guard eligibleDaysToDate > 0 else {
-            return Color.ds.textSecondary
+    private var secondaryText: String {
+        guard !plannedDates.isEmpty else {
+            return "Choose dates for the rest of this month."
         }
 
-        return confirmedDays == eligibleDaysToDate ? Color.ds.success : Color.ds.info
+        if plannedDates.count == 1 {
+            return "Next planned office day"
+        }
+
+        return "Next of \(plannedDates.count) planned office days"
     }
 }
 
@@ -91,11 +93,11 @@ struct RecentTrendCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            Text("Recent progress")
+            Text("Trends")
                 .font(AppTypography.sectionTitle)
                 .foregroundStyle(Color.ds.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("dashboard.recentProgress")
+                .accessibilityIdentifier("compliance.trends")
 
             DSCard(includesShadow: false) {
                 VStack(alignment: .leading, spacing: AppSpacing.md) {
@@ -108,10 +110,10 @@ struct RecentTrendCard: View {
 
                     if points.isEmpty || !hasRecordedData {
                         ContentUnavailableView(
-                            "No progress to chart yet",
+                            "No trend data",
                             systemImage: "chart.bar",
                             description: Text(
-                                "Periods will appear here after you record attendance, leave, or a custom exclusion."
+                                "Record attendance, leave or an exclusion to start the chart."
                             )
                         )
                         .frame(maxWidth: .infinity, minHeight: 160)
@@ -225,7 +227,7 @@ struct RecentTrendCard: View {
 
     private var trendSummary: String {
         guard !recordedPoints.isEmpty else {
-            return "Compare office days with your saved target over time."
+            return "Office days compared with your target."
         }
 
         let targetMetCount = recordedPoints.filter {
@@ -233,8 +235,7 @@ struct RecentTrendCard: View {
         }.count
         let periodName = periodName(count: recordedPoints.count)
         let verb = recordedPoints.count == 1 ? "is" : "are"
-        return "So far, \(targetMetCount) of \(recordedPoints.count) recorded \(periodName) "
-            + "\(verb) at or above target."
+        return "\(targetMetCount) of \(recordedPoints.count) \(periodName) \(verb) at or above target."
     }
 
     private func periodName(count: Int) -> String {

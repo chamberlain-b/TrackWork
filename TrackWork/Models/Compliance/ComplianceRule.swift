@@ -13,6 +13,7 @@ final class ComplianceRule {
     var prorateFixedTargetForLeave: Bool
     var minimumOfficeMinutes: Int
     var selectedISOWeekdays: [Int]
+    var effectiveFrom: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -27,6 +28,7 @@ final class ComplianceRule {
         prorateFixedTargetForLeave: Bool = true,
         minimumOfficeMinutes: Int = 180,
         selectedISOWeekdays: [Int] = [1, 2, 3, 4, 5],
+        effectiveFrom: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -40,6 +42,7 @@ final class ComplianceRule {
         self.prorateFixedTargetForLeave = prorateFixedTargetForLeave
         self.minimumOfficeMinutes = minimumOfficeMinutes
         self.selectedISOWeekdays = selectedISOWeekdays
+        self.effectiveFrom = effectiveFrom
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

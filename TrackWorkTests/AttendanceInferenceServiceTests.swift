@@ -56,27 +56,27 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(inference.complianceTreatment, .requiresReview)
     }
 
-    func testHomeVisitCountsAsDetectedHomeWhenOfficeThresholdIsNotMet() throws {
+    func testHomeAndOfficeEvidenceBelowThresholdRecordsMixedDay() throws {
         let inferences = service.inferDailyAttendance(
             from: [
                 event(.home, .entered, "2026-07-06 08:00"),
                 event(.home, .exited, "2026-07-06 09:00"),
                 event(.office, .entered, "2026-07-06 10:00"),
-                event(.office, .exited, "2026-07-06 11:00")
+                event(.office, .exited, "2026-07-06 12:59")
             ],
             periodStart: day("2026-07-06"),
             periodEnd: day("2026-07-06")
         )
 
         let inference = try XCTUnwrap(inferences.first)
-        XCTAssertEqual(inference.officeMinutes, 60)
+        XCTAssertEqual(inference.officeMinutes, 179)
         XCTAssertEqual(inference.homeMinutes, 60)
-        XCTAssertEqual(inference.detectedClassification, .home)
-        XCTAssertEqual(inference.finalClassification, .home)
+        XCTAssertEqual(inference.detectedClassification, .mixed)
+        XCTAssertEqual(inference.finalClassification, .mixed)
         XCTAssertEqual(inference.complianceTreatment, .countsAsHome)
     }
 
-    func testOfficeThresholdWithHomeEvidenceCountsAsDetectedMixed() throws {
+    func testOfficeThresholdWithHomeEvidenceRecordsOfficeDay() throws {
         let inferences = service.inferDailyAttendance(
             from: [
                 event(.home, .entered, "2026-07-06 07:30"),
@@ -91,8 +91,8 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         let inference = try XCTUnwrap(inferences.first)
         XCTAssertEqual(inference.officeMinutes, 180)
         XCTAssertEqual(inference.homeMinutes, 30)
-        XCTAssertEqual(inference.detectedClassification, .mixed)
-        XCTAssertEqual(inference.finalClassification, .mixed)
+        XCTAssertEqual(inference.detectedClassification, .office)
+        XCTAssertEqual(inference.finalClassification, .office)
         XCTAssertEqual(inference.complianceTreatment, .countsAsOffice)
     }
 
@@ -166,6 +166,55 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(inference.complianceTreatment, .excludedFromRequirement)
     }
 
+    func testPublicHolidayTakesPrecedenceOverLeaveAndCustomExclusion() throws {
+        let subjectDate = day("2026-07-06")
+        let holiday = PublicHoliday(
+            date: subjectDate,
+            name: "Test Holiday",
+            country: .australia,
+            jurisdictionId: "AU-VIC",
+            isRegional: false,
+            sourceName: "Test"
+        )
+
+        let inference = try XCTUnwrap(
+            service.inferDailyAttendance(
+                from: [],
+                periodStart: subjectDate,
+                periodEnd: subjectDate,
+                leaveRecords: [LeaveRecord(date: subjectDate, leaveType: .annualLeave)],
+                publicHolidays: [holiday],
+                customExcludedDays: [CustomExcludedDay(date: subjectDate)]
+            ).first
+        )
+
+        XCTAssertEqual(inference.finalClassification, .publicHoliday)
+        XCTAssertEqual(inference.complianceTreatment, .excludedFromRequirement)
+    }
+
+    func testLeaveTakesPrecedenceOverCustomExclusionAndManualStatus() {
+        let subjectDate = day("2026-07-06")
+        let attendanceDay = AttendanceDay(
+            date: subjectDate,
+            detectedClassification: .unknown,
+            finalClassification: .office,
+            manualClassification: .office,
+            complianceTreatment: .countsAsOffice
+        )
+
+        service.recalculateAttendanceDays(
+            [attendanceDay],
+            affectedDates: [subjectDate],
+            events: [],
+            leaveRecords: [LeaveRecord(date: subjectDate, leaveType: .sickLeave)],
+            customExcludedDays: [CustomExcludedDay(date: subjectDate)]
+        )
+
+        XCTAssertEqual(attendanceDay.finalClassification, .sickLeave)
+        XCTAssertEqual(attendanceDay.manualClassification, .office)
+        XCTAssertEqual(attendanceDay.complianceTreatment, .excludedFromRequirement)
+    }
+
     func testCustomExclusionKeepsDetectedStatusAndForcesNonWorkingTreatment() throws {
         let excludedDay = CustomExcludedDay(
             date: day("2026-07-06"),
@@ -227,8 +276,17 @@ final class AttendanceInferenceServiceTests: XCTestCase {
     }
 
     func testRecalculateAffectedAttendanceDayRecordsWhenEventsChange() {
-        let affectedDay = AttendanceDay(date: day("2026-07-06"), detectedClassification: .unknown, finalClassification: .unknown)
-        let unaffectedDay = AttendanceDay(date: day("2026-07-07"), detectedClassification: .home, finalClassification: .home, homeMinutes: 60)
+        let affectedDay = AttendanceDay(
+            date: day("2026-07-06"),
+            detectedClassification: .unknown,
+            finalClassification: .unknown
+        )
+        let unaffectedDay = AttendanceDay(
+            date: day("2026-07-07"),
+            detectedClassification: .home,
+            finalClassification: .home,
+            homeMinutes: 60
+        )
 
         let affectedDates = service.recalculateAttendanceDays(
             [affectedDay, unaffectedDay],
@@ -249,8 +307,44 @@ final class AttendanceInferenceServiceTests: XCTestCase {
         XCTAssertEqual(unaffectedDay.homeMinutes, 60)
     }
 
+    func testCrossMidnightVisitMarksAndAllocatesBothDates() throws {
+        let events = [
+            event(.office, .entered, "2026-07-06 22:00"),
+            event(.office, .exited, "2026-07-07 02:00")
+        ]
+
+        XCTAssertEqual(
+            LocationEventDateResolver(calendar: calendar).affectedDates(from: events),
+            [day("2026-07-06"), day("2026-07-07")]
+        )
+
+        let inferences = service.inferDailyAttendance(
+            from: events,
+            periodStart: day("2026-07-06"),
+            periodEnd: day("2026-07-07")
+        )
+
+        XCTAssertEqual(inferences.count, 2)
+        XCTAssertEqual(inferences[0].officeMinutes, 120)
+        XCTAssertEqual(inferences[1].officeMinutes, 120)
+    }
+
+    func testUnclosedEntryStillMarksItsDateForReview() {
+        let events = [event(.office, .entered, "2026-07-06 09:00")]
+
+        XCTAssertEqual(
+            LocationEventDateResolver(calendar: calendar).affectedDates(from: events),
+            [day("2026-07-06")]
+        )
+    }
+
     private func event(_ placeType: PlaceType, _ eventKind: LocationEventKind, _ timestamp: String) -> LocationEvent {
-        let placeId = UUID()
+        let placeId = switch placeType {
+        case .office:
+            UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        case .home:
+            UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        }
         return LocationEvent(
             placeId: placeId,
             placeName: placeType.displayName,

@@ -17,15 +17,25 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Summary"].waitForExistence(timeout: 8))
         XCTAssertEqual(app.alerts.count, 0)
-        for tab in ["Summary", "Calendar", "History", "Insights", "Settings"] {
+        for tab in ["Summary", "Calendar", "History", "Settings"] {
             XCTAssertTrue(app.tabBars.buttons[tab].exists, "Missing \(tab) tab")
         }
+        XCTAssertFalse(app.tabBars.buttons["Insights"].exists)
 
         app.tabBars.buttons["Settings"].tap()
-        app.buttons["Location Setup"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "Settings")
 
-        XCTAssertTrue(app.navigationBars["Location Setup"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Place Selection"].exists)
+        reveal(identifier: "settings.workdays").tap()
+        XCTAssertTrue(app.navigationBars["Workdays"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.switches["Monday"].exists)
+        XCTAssertTrue(app.switches["Friday"].exists)
+        app.navigationBars.buttons["Settings"].tap()
+
+        reveal(identifier: "settings.locations").tap()
+
+        XCTAssertTrue(app.navigationBars["Locations"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element(identifier: "locationSetup.quickCheckIn").exists)
         XCTAssertEqual(app.alerts.count, 0)
 
         app.buttons["locationSetup.home"].tap()
@@ -52,21 +62,37 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         launch(fixture: "populated")
 
         XCTAssertTrue(element(identifier: "dashboard.hero").waitForExistence(timeout: 8))
-        XCTAssertTrue(reveal(identifier: "dashboard.atAGlance").exists)
-        XCTAssertTrue(reveal(identifier: "dashboard.officeShareToDate").exists)
-        XCTAssertTrue(reveal(identifier: "dashboard.recentProgress").exists)
-        XCTAssertTrue(reveal(identifier: "dashboard.calculation").exists)
-        attachScreenshot(named: "Populated Summary")
+        attachScreenshot(named: "Summary Top")
+        XCTAssertFalse(element(identifier: "dashboard.atAGlance").exists)
+        XCTAssertFalse(element(identifier: "dashboard.calculation").exists)
+        let currentCompliance = app.staticTexts["current compliance"]
+        XCTAssertTrue(currentCompliance.exists)
+        XCTAssertTrue(
+            app.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS %@", "eligible business days in office")
+            ).firstMatch.exists,
+            "Expected the Summary to explain the month-to-date compliance calculation"
+        )
 
-        let calculationDisclosure = reveal(identifier: "dashboard.calculation.disclosure")
-        XCTAssertTrue(calculationDisclosure.isHittable)
-        calculationDisclosure.tap()
-        XCTAssertTrue(app.staticTexts["Scheduled workdays"].waitForExistence(timeout: 3))
+        let trends = reveal(identifier: "dashboard.trends")
+        XCTAssertTrue(trends.isHittable)
+        attachScreenshot(named: "Summary Trends")
+        trends.tap()
+        XCTAssertTrue(app.navigationBars["Compliance details"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons["Summary"].tap()
+
+        let officePlan = reveal(identifier: "dashboard.officePlan")
+        XCTAssertTrue(officePlan.isHittable)
+        attachScreenshot(named: "Summary Office Plan")
+        officePlan.tap()
+        XCTAssertTrue(app.navigationBars["Plan Office Days"].waitForExistence(timeout: 5))
+        attachScreenshot(named: "Office Plan From Summary")
     }
 
     func testCurrentLocationSelectionRequestsPermissionOnlyAfterRationale() {
         app.launchEnvironment["TRACKWORK_UI_TESTING"] = "1"
         app.launchEnvironment["TRACKWORK_UI_TEST_FIXTURE"] = "fresh"
+        app.launchEnvironment["TRACKWORK_UI_TEST_CURRENT_LOCATION"] = "1"
         app.resetAuthorizationStatus(for: .location)
 
         var handledLocationPrompt = false
@@ -84,7 +110,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
 
         app.launch()
         app.tabBars.buttons["Settings"].tap()
-        app.buttons["Location Setup"].tap()
+        reveal(identifier: "settings.locations").tap()
         app.buttons["locationSetup.home"].tap()
 
         XCTAssertEqual(app.alerts.count, 0)
@@ -104,18 +130,37 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         attachScreenshot(named: "Current Location Selected")
     }
 
-    func testSummaryCalendarActionOpensCalendar() {
+    func testAutomaticAttendanceStartsOffWithoutRequestingPermission() {
+        app.launchEnvironment["TRACKWORK_UI_TESTING"] = "1"
+        app.launchEnvironment["TRACKWORK_UI_TEST_FIXTURE"] = "fresh"
+        app.resetAuthorizationStatus(for: .location)
+        app.launch()
+
+        app.tabBars.buttons["Settings"].tap()
+        let automaticAttendance = reveal(identifier: "settings.automaticAttendance")
+        XCTAssertTrue(automaticAttendance.isHittable)
+        automaticAttendance.tap()
+
+        XCTAssertTrue(app.navigationBars["Automatic Attendance"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element(identifier: "automaticTracking.status").exists)
+        XCTAssertTrue(app.buttons["automaticTracking.requestWhenInUse"].exists)
+        XCTAssertFalse(app.buttons["automaticTracking.requestWhenInUse"].isEnabled)
+        XCTAssertEqual(app.alerts.count, 0)
+        attachScreenshot(named: "Automatic Attendance Opt In")
+    }
+
+    func testSummaryReviewActionOpensReviewQueue() {
         launch(fixture: "fresh")
 
-        let calendarAction = reveal(identifier: "dashboard.calendarAction")
-        XCTAssertTrue(calendarAction.isHittable)
-        calendarAction.tap()
+        let reviewAction = reveal(identifier: "dashboard.reviewAction")
+        XCTAssertTrue(reviewAction.isHittable)
+        reviewAction.tap()
 
-        XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Review Days"].waitForExistence(timeout: 5))
     }
 
     func testCalendarAndHistoryUseMatchingLargeHeaders() {
-        launch(fixture: "fresh")
+        launch(fixture: "populated")
 
         app.tabBars.buttons["Calendar"].tap()
         XCTAssertTrue(app.navigationBars["Calendar"].waitForExistence(timeout: 5))
@@ -178,16 +223,17 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
     func testCSVAndPDFExportsCompleteWithoutSharingSensitiveRawData() {
         launch(fixture: "populated")
 
-        app.tabBars.buttons["Insights"].tap()
-        element(identifier: "insights.export").tap()
+        app.tabBars.buttons["History"].tap()
+        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        element(identifier: "history.export").tap()
         XCTAssertTrue(app.navigationBars["Export"].waitForExistence(timeout: 5))
 
-        revealButton(label: "Generate CSV").tap()
+        revealButton(label: "Create CSV").tap()
         let share = element(identifier: "export.share")
         XCTAssertTrue(share.waitForExistence(timeout: 8))
         XCTAssertTrue(share.label.localizedCaseInsensitiveContains("CSV"), share.label)
 
-        revealButton(label: "Generate PDF").tap()
+        revealButton(label: "Create PDF").tap()
         XCTAssertTrue(waitUntil(timeout: 8) {
             self.element(identifier: "export.share").label.localizedCaseInsensitiveContains("PDF")
         })
@@ -330,6 +376,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
     }
 
     private func attachScreenshot(named name: String) {
+        Thread.sleep(forTimeInterval: 0.6)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways

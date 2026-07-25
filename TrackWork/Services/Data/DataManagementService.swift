@@ -16,6 +16,7 @@ struct DataManagementService {
             try deleteAll(LocationEvent.self, from: modelContext)
             try deleteAll(LeaveRecord.self, from: modelContext)
             try deleteAll(CustomExcludedDay.self, from: modelContext)
+            try deleteAll(PlannedOfficeDay.self, from: modelContext)
             try deleteAll(AttendanceDay.self, from: modelContext)
             try deleteAll(Place.self, from: modelContext)
             try deleteAll(ComplianceRule.self, from: modelContext)

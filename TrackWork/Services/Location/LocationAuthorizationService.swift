@@ -44,15 +44,48 @@ final class LocationAuthorizationService: NSObject {
         case .denied:
             finishWithError("Location access is off. You can enable it in iOS Settings or choose an address instead.")
         case .restricted:
-            finishWithError("Location access is restricted on this device. Choose an address or a point on the map instead.")
+            finishWithError(
+                "Location access is restricted on this device. Choose an address or a point on the map instead."
+            )
         @unknown default:
             finishWithError("Current location is unavailable. Choose an address or a point on the map instead.")
         }
     }
 
+    func discardCurrentLocation() {
+        currentLocation = nil
+    }
+
     private func requestOneLocationFix() {
         shouldRequestLocationAfterAuthorization = false
+
+        if let uiTestCurrentLocation {
+            publishCurrentLocation(uiTestCurrentLocation)
+            return
+        }
+
         locationManager.requestLocation()
+    }
+
+    private var uiTestCurrentLocation: CLLocation? {
+        guard AppLaunchConfiguration.isUITesting,
+              ProcessInfo.processInfo.environment["TRACKWORK_UI_TEST_CURRENT_LOCATION"] == "1"
+        else {
+            return nil
+        }
+
+        return CLLocation(latitude: -37.8136, longitude: 144.9631)
+    }
+
+    private func publishCurrentLocation(_ location: CLLocation) {
+        guard isRequestingLocation else {
+            return
+        }
+
+        currentLocation = location
+        locationUpdateID += 1
+        isRequestingLocation = false
+        errorMessage = nil
     }
 
     private func finishWithError(_ message: String) {
@@ -94,14 +127,7 @@ extension LocationAuthorizationService: CLLocationManagerDelegate {
         }
 
         Task { @MainActor in
-            guard isRequestingLocation else {
-                return
-            }
-
-            currentLocation = location
-            locationUpdateID += 1
-            isRequestingLocation = false
-            errorMessage = nil
+            publishCurrentLocation(location)
         }
     }
 

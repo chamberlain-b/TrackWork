@@ -9,21 +9,22 @@ struct ScreenBackgroundModifier: ViewModifier {
 
                     LinearGradient(
                         colors: [
-                            Color.ds.backgroundSoftBlue.opacity(0.5),
-                            Color.ds.backgroundSecondary.opacity(0.28),
+                            Color.ds.backgroundSoftBlue.opacity(0.38),
+                            Color.ds.backgroundSecondary.opacity(0.18),
                             Color.ds.backgroundPrimary.opacity(0.0)
                         ],
                         startPoint: .topLeading,
-                        endPoint: .center
+                        endPoint: UnitPoint(x: 0.68, y: 0.58)
                     )
 
-                    LinearGradient(
+                    RadialGradient(
                         colors: [
-                            Color.ds.accentSoft.opacity(0.2),
+                            Color.ds.accentSoft.opacity(0.14),
                             Color.ds.backgroundPrimary.opacity(0.0)
                         ],
-                        startPoint: .bottomTrailing,
-                        endPoint: .center
+                        center: .bottomTrailing,
+                        startRadius: 40,
+                        endRadius: 520
                     )
                 }
                 .ignoresSafeArea()

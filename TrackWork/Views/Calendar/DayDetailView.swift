@@ -9,6 +9,7 @@ struct DayDetailView: View {
     @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
     @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
     @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
+    @Query(sort: \PlannedOfficeDay.date) private var plannedOfficeDays: [PlannedOfficeDay]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
     let date: Date
@@ -26,6 +27,11 @@ struct DayDetailView: View {
     @State private var saveError: String?
 
     private let calendar = Calendar.workTrackCalendar
+    private let ruleResolver = ComplianceRuleResolver()
+
+    private var activeRule: ComplianceRule {
+        ruleResolver.rule(for: date, from: complianceRules) ?? ComplianceRule()
+    }
 
     private var detectedStatus: AttendanceClassification {
         attendanceDay?.detectedClassification ?? .unknown
@@ -89,11 +95,11 @@ struct DayDetailView: View {
     }
 
     private var selectedISOWeekdays: Set<Int> {
-        Set(complianceRules.first?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
+        Set(activeRule.selectedISOWeekdays)
     }
 
     private var activeJurisdictionId: String {
-        complianceRules.first?.jurisdictionId ?? "AU-VIC"
+        activeRule.jurisdictionId
     }
 
     private var activePublicHoliday: PublicHoliday? {
@@ -163,7 +169,7 @@ struct DayDetailView: View {
             return "Non-workdays are not eligible compliance days."
         }
 
-        return "This one-off exclusion removes the eligible workday from the selected period."
+        return "Excluded from eligible workdays."
     }
 
     init(
@@ -171,7 +177,8 @@ struct DayDetailView: View {
         attendanceDay: AttendanceDay?,
         leaveRecord: LeaveRecord?,
         publicHoliday: PublicHoliday?,
-        customExcludedDay: CustomExcludedDay?
+        customExcludedDay: CustomExcludedDay?,
+        proposedStatus: AttendanceClassification? = nil
     ) {
         self.date = date
         self.attendanceDay = attendanceDay
@@ -179,14 +186,15 @@ struct DayDetailView: View {
         self.publicHoliday = publicHoliday
         self.customExcludedDay = customExcludedDay
 
-        let initialFinalStatus = attendanceDay?.manualClassification
+        let initialFinalStatus = proposedStatus
+            ?? attendanceDay?.manualClassification
             ?? attendanceDay?.finalClassification
             ?? .unknown
         let detectedStatus = attendanceDay?.detectedClassification ?? .unknown
         let initialStatus = DayDetailStatusOptions.editable.contains(initialFinalStatus)
             ? initialFinalStatus
             : DayDetailStatusOptions.editable.contains(detectedStatus) ? detectedStatus : .unknown
-        let initialLeaveType = leaveRecord?.leaveType ?? initialFinalStatus.leaveType
+        let initialLeaveType = proposedStatus?.leaveType ?? leaveRecord?.leaveType ?? initialFinalStatus.leaveType
         let initialNote = attendanceDay?.note ?? leaveRecord?.note ?? ""
 
         _selectedStatus = State(initialValue: initialStatus)
@@ -287,8 +295,7 @@ struct DayDetailView: View {
 
 private extension DayDetailView {
     var futureDateMessage: String {
-        "You can schedule full-day leave or a custom exclusion now. "
-            + "Office and home attendance unlock on the day."
+        "Add full-day leave or an exclusion now. Attendance unlocks on the day."
     }
 
     func loadExistingReason() {
@@ -302,6 +309,7 @@ private extension DayDetailView {
             syncLeaveRecord()
             syncCustomExcludedDay()
             syncFutureAttendanceDay()
+            removeOfficePlanForDate()
             saveModelContext()
             return
         }
@@ -325,6 +333,7 @@ private extension DayDetailView {
         upsertManualAdjustment(for: day)
         syncLeaveRecord()
         syncCustomExcludedDay()
+        removeOfficePlanForDate()
 
         saveModelContext()
     }
@@ -334,8 +343,15 @@ private extension DayDetailView {
             try modelContext.save()
             dismiss()
         } catch {
+            modelContext.rollback()
             saveError = "Changes could not be saved. Try again."
         }
+    }
+
+    func removeOfficePlanForDate() {
+        plannedOfficeDays
+            .filter { calendar.isDate($0.date, inSameDayAs: date) }
+            .forEach(modelContext.delete)
     }
 
     func upsertManualAdjustment(for day: AttendanceDay) {
@@ -457,7 +473,6 @@ private extension DayDetailView {
             return
         }
 
-
         if isCustomExcluded {
             attendanceDay.applyManualEdit(
                 finalClassification: .nonWorkingDay,
@@ -491,7 +506,7 @@ private extension DayDetailView {
         ComplianceTreatmentResolver.resolve(
             classification: status,
             officeMinutes: attendanceDay?.officeMinutes ?? 0,
-            minimumOfficeMinutes: complianceRules.first?.minimumOfficeMinutes ?? 180
+            minimumOfficeMinutes: activeRule.minimumOfficeMinutes
         )
     }
 }

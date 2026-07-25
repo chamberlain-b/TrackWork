@@ -22,17 +22,17 @@ Privately record office days, leave, exclusions, and hybrid-work progress with A
 
 Work Track is a private, on-device companion for understanding hybrid-work attendance and compliance.
 
-Record office and home days manually, add full-day annual or sick leave, preserve explanatory notes, and make a clearly attributed manual correction when detected evidence is incomplete. Custom excluded days remain separate from attendance and reduce eligible workdays without double-counting holidays or leave.
+Record office and home days manually, with a one-shot saved-place check-in, or through optional private geofence automation. Add full-day annual or sick leave, preserve explanatory notes, and make a clearly attributed manual correction when detected evidence is incomplete. Manual corrections remain authoritative on ordinary attendance days; holidays, leave, and exclusions stay protected. Custom excluded days remain separate from attendance and reduce eligible workdays without double-counting holidays or leave.
 
 Review the current month at a glance or choose current month, last 30 days, previous month, current quarter, previous quarter, year to date, or an inclusive custom range. Monthly, quarterly, and yearly trends use the same saved rule and exclusions as the detailed compliance view.
 
-The 1.0 bundle includes verified 2026 public-holiday calendars for every Australian state and territory, New Zealand National, and supported New Zealand regional anniversary options. Missing holiday years produce an explicit error instead of silently assuming there are no holidays.
+The 1.0 bundle includes sourced 2026 and 2027 public-holiday calendars for every Australian state and territory, New Zealand National, and supported New Zealand regional anniversary options. Victoria's 24 September 2027 Friday before the AFL Grand Final date follows the official Victorian Department of Education calendar and remains subject to final AFL schedule confirmation. Ranges containing missing holiday years are explicitly flagged, and exports are blocked, rather than silently assuming there are no holidays.
 
 Generate a styled PDF or spreadsheet-compatible CSV report for any supported period. Default reports contain derived day-level attendance and exclude raw location events and GPS coordinates.
 
-Your app data stays in Work Track's on-device storage. There is no account, advertising, analytics SDK, or app-managed cloud sync. Reports leave the app only when you choose to share them. Settings includes clear privacy information and a confirmed option to delete all on-device user data.
+Your app data stays in Work Track's on-device storage. There is no account, advertising, analytics SDK, or app-managed cloud sync. Reports and portable backups leave the app only when you choose a destination. Standard backups omit saved addresses, coordinates, and raw location events; full private backups include them only after an explicit warning. Optional device authentication can lock the app, and a privacy-safe local reminder can prompt you to review recent days.
 
-Save home and office places by searching for an address, using your current location, or adjusting the pin on a map. Selected addresses and coordinates stay in on-device storage. Current location is requested only when you choose it; automatic background detection remains unavailable and manual attendance remains the supported workflow.
+Save home and office places by searching for an address, using your current location, or adjusting the pin on a map. Selected addresses and coordinates stay in on-device storage. One-shot actions request a single foreground location sample. If you explicitly enable Automatic Attendance, Work Track requests Always access so iOS can deliver saved-area entry and exit events while the app is closed. This uses geofences rather than continuous GPS, stores no route, and keeps raw events on-device.
 
 ## Keywords
 
@@ -41,17 +41,23 @@ Save home and office places by searching for an address, using your current loca
 ## What's New In 1.0
 
 - Manual office, home, leave, note, override, and custom-exclusion records.
+- A focused review queue, office-day planning, searchable History, and actionable Insights.
 - Seven deterministic compliance periods and monthly, quarterly, and yearly trends.
-- Verified 2026 AU and NZ public holidays.
-- Address-first home and office place setup with optional one-shot current location.
+- Effective-dated rule history and bundled 2026–2027 AU and NZ public holidays.
+- Address-first place setup, one-shot check-in, and optional private geofence automation.
+- App Shortcuts for recording today and reviewing pending days.
 - Private PDF and CSV reports.
-- On-device privacy disclosure and confirmed data reset.
+- Standard/full portable backups, optional app lock, private review reminders, and confirmed data reset.
+
+## Release Accuracy Note
+
+This note is not customer-facing App Store copy. Recheck Victoria's bundled 24 September 2027 Friday before the AFL Grand Final date against Business Victoria after the final 2027 AFL schedule is published.
 
 ## App Privacy Draft
 
 - Tracking: No.
 - Data collected: No. The app has no developer-operated network service, analytics, advertising, account, or third-party SDK. User-initiated place lookup uses Apple Maps, and no lookup or location data is sent to the Work Track developer.
-- Precise location: Not collected by the developer. Selected addresses and coordinates remain on-device. Current location is used only for an explicit one-shot place selection; Always access and automatic background detection are disabled in 1.0.
+- Precise location: Not collected by the developer. Selected addresses and coordinates remain on-device. One-shot actions discard the sampled coordinate after use. Optional Automatic Attendance uses Always authorization for saved-area boundary events, never continuous GPS; those events remain on-device and are excluded from default reports and standard backups.
 - User content: Not collected by the developer. Notes remain on-device unless the user deliberately shares a report.
 
 Re-answer the App Privacy questionnaire if developer-operated networking, analytics, cloud sync, crash reporting under developer control, third-party SDKs, or new location uses are added.
