@@ -49,7 +49,8 @@ final class ComplianceRuleResolverTests: XCTestCase {
             requiredPercentage: 0.6,
             prorateFixedTargetForLeave: false,
             minimumOfficeMinutes: 240,
-            selectedISOWeekdays: [1, 2, 3, 4]
+            selectedISOWeekdays: [1, 2, 3, 4],
+            preferredOfficeISOWeekdays: [2, 4]
         )
         let effectiveFrom = date(2026, 7, 1)
 
@@ -61,6 +62,7 @@ final class ComplianceRuleResolverTests: XCTestCase {
         XCTAssertEqual(copy.requiredPercentage, 0.6)
         XCTAssertEqual(copy.minimumOfficeMinutes, 240)
         XCTAssertEqual(copy.selectedISOWeekdays, [1, 2, 3, 4])
+        XCTAssertEqual(copy.preferredOfficeISOWeekdays, [2, 4])
         XCTAssertEqual(copy.effectiveFrom, effectiveFrom)
     }
 
@@ -90,6 +92,48 @@ final class ComplianceRuleResolverTests: XCTestCase {
                 from: [earlierUpdatedRule, laterUpdatedRule]
             ) === laterUpdatedRule
         )
+    }
+
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+}
+
+final class OfficePlanSuggestionServiceTests: XCTestCase {
+    private let service = OfficePlanSuggestionService()
+    private let calendar = Calendar.workTrackCalendar
+
+    func testPreferredWeekdaysAreSuggestedBeforeEarlierNonPreferredDays() {
+        let monday = date(2026, 7, 6)
+        let tuesday = date(2026, 7, 7)
+        let wednesday = date(2026, 7, 8)
+        let thursday = date(2026, 7, 9)
+
+        let result = service.suggestedDates(
+            from: [monday, tuesday, wednesday, thursday],
+            excluding: [],
+            count: 3,
+            preferredISOWeekdays: [2, 4],
+            calendar: calendar
+        )
+
+        XCTAssertEqual(result, [tuesday, thursday, monday])
+    }
+
+    func testSuggestionExcludesExistingPlansAndFallsBackToChronologicalOrder() {
+        let monday = date(2026, 7, 6)
+        let tuesday = date(2026, 7, 7)
+        let wednesday = date(2026, 7, 8)
+
+        let result = service.suggestedDates(
+            from: [wednesday, monday, tuesday],
+            excluding: [monday],
+            count: 3,
+            preferredISOWeekdays: [],
+            calendar: calendar
+        )
+
+        XCTAssertEqual(result, [tuesday, wednesday])
     }
 
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {

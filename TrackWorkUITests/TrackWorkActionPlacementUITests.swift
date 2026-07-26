@@ -23,7 +23,7 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Check In"].waitForExistence(timeout: 5))
         app.navigationBars.buttons["Summary"].tap()
 
-        app.tabBars.buttons["Calendar"].tap()
+        app.workTrackTab(named: "Calendar").tap()
         let actions = element(identifier: "calendar.actions")
         XCTAssertTrue(actions.waitForExistence(timeout: 5))
         XCTAssertTrue(actions.isHittable)

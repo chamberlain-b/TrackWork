@@ -18,11 +18,6 @@ struct SettingsLocationSection: View {
             }
             .accessibilityIdentifier("settings.locations")
 
-            NavigationLink {
-                RecentLocationEventsView()
-            } label: {
-                Label("Location Events", systemImage: "list.bullet.rectangle")
-            }
         } header: {
             Text("Location")
         }
@@ -74,7 +69,7 @@ struct SettingsComplianceRuleSection: View {
             .accessibilityIdentifier("settings.requirementType")
 
             if requirementType == .fixedMonthlyDays {
-                LabeledContent("Days per period") {
+                LabeledContent("Days per month") {
                     TextField("Days", value: $fixedRequiredDays, format: .number)
                         .keyboardType(.numberPad)
                         .multilineTextAlignment(.trailing)
@@ -115,6 +110,7 @@ struct SettingsComplianceRuleSection: View {
 struct SettingsWorkScheduleSection: View {
     @Binding var minimumOfficeMinutes: Int
     let workdays: [SettingsWorkdaySelection]
+    let preferredOfficeDays: [SettingsWorkdaySelection]
 
     var body: some View {
         Section {
@@ -124,6 +120,13 @@ struct SettingsWorkScheduleSection: View {
                 LabeledContent("Workdays", value: selectedWorkdaysSummary)
             }
             .accessibilityIdentifier("settings.workdays")
+
+            NavigationLink {
+                SettingsPreferredOfficeDaysView(workdays: preferredOfficeDays)
+            } label: {
+                LabeledContent("Preferred office days", value: preferredOfficeDaysSummary)
+            }
+            .accessibilityIdentifier("settings.preferredOfficeDays")
 
             LabeledContent("Minimum office time") {
                 HStack(spacing: AppSpacing.xxs) {
@@ -148,15 +151,23 @@ struct SettingsWorkScheduleSection: View {
             .filter { $0.isSelected.wrappedValue }
             .map(\.id)
 
-        if selectedIds == [1, 2, 3, 4, 5] {
-            return "Mon–Fri"
-        }
+        return SettingsWeekdaySummary.text(
+            for: selectedIds,
+            from: workdays.map { SettingsWorkday(id: $0.id, name: $0.name) }
+        )
+    }
 
-        if selectedIds.count == 7 {
-            return "Every day"
+    private var preferredOfficeDaysSummary: String {
+        let selected = preferredOfficeDays.filter { $0.isSelected.wrappedValue }
+        guard !selected.isEmpty else {
+            return "No preference"
         }
-
-        return "\(selectedIds.count) days"
+        if selected.count == preferredOfficeDays.count {
+            return "Any workday"
+        }
+        return selected
+            .map { String($0.name.prefix(3)) }
+            .joined(separator: ", ")
     }
 }
 
@@ -177,6 +188,43 @@ private struct SettingsWorkdaysView: View {
         .appScreenBackground()
         .navigationTitle("Workdays")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SettingsPreferredOfficeDaysView: View {
+    let workdays: [SettingsWorkdaySelection]
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(workdays) { workday in
+                    Toggle(workday.name, isOn: workday.isSelected)
+                }
+            } footer: {
+                Text("Suggest Days uses these first, then fills any remaining need chronologically.")
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
+        .navigationTitle("Preferred Office Days")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct SettingsSetupSummarySection: View {
+    let target: String
+    let workdays: String
+    let region: String
+    let automaticAttendance: String
+
+    var body: some View {
+        Section("Setup") {
+            LabeledContent("Target", value: target)
+            LabeledContent("Workdays", value: workdays)
+            LabeledContent("Region", value: region)
+            LabeledContent("Automatic Attendance", value: automaticAttendance)
+        }
+        .accessibilityIdentifier("settings.setupSummary")
     }
 }
 
@@ -296,4 +344,24 @@ struct SettingsWorkdaySelection: Identifiable {
     let id: Int
     let name: String
     let isSelected: Binding<Bool>
+}
+
+enum SettingsWeekdaySummary {
+    static func text(
+        for selectedISOWeekdays: [Int],
+        from workdays: [SettingsWorkday]
+    ) -> String {
+        let selected = Set(selectedISOWeekdays)
+        if selected == Set(1...5) {
+            return "Mon–Fri"
+        }
+        if selected == Set(1...7) {
+            return "Every day"
+        }
+
+        let names = workdays
+            .filter { selected.contains($0.id) }
+            .map { String($0.name.prefix(3)) }
+        return names.isEmpty ? "Not set" : names.joined(separator: ", ")
+    }
 }

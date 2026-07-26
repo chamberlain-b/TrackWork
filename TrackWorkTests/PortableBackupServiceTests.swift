@@ -55,6 +55,11 @@ final class PortableBackupServiceTests: XCTestCase {
     XCTAssertEqual(result.privacyScope, .fullPrivate)
     XCTAssertEqual(result.recordCounts.total, 9)
     XCTAssertEqual(restoredData, sourceData)
+    XCTAssertEqual(
+      try fetch(ComplianceRule.self, from: destinationContext).first?
+        .preferredOfficeISOWeekdays,
+      [2, 4]
+    )
     XCTAssertTrue(
       try fetch(AttendanceDay.self, from: destinationContext).allSatisfy {
         $0.id != fixture.staleAttendanceID
@@ -240,5 +245,30 @@ final class PortableBackupServiceTests: XCTestCase {
     XCTAssertThrowsError(try service.inspect(mislabelledData)) { error in
       XCTAssertEqual(error as? PortableBackupError, .sensitiveDataRequiresFullPrivateScope)
     }
+  }
+
+  func testVersionOneBackupWithoutPreferredOfficeDaysRestoresWithNoPreference() throws {
+    let sourceContainer = try makeContainer()
+    try seedCompleteStore(sourceContainer.mainContext)
+    let service = PortableBackupService()
+    let currentData = try service.makeBackupData(from: sourceContainer.mainContext)
+
+    var root = try XCTUnwrap(JSONSerialization.jsonObject(with: currentData) as? [String: Any])
+    var rules = try XCTUnwrap(root["complianceRules"] as? [[String: Any]])
+    rules[0].removeValue(forKey: "preferredOfficeISOWeekdays")
+    root["complianceRules"] = rules
+    let legacyData = try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
+
+    let destinationContainer = try makeContainer()
+    _ = try service.restore(
+      legacyData,
+      policy: .replace,
+      into: destinationContainer.mainContext
+    )
+
+    let restoredRule = try XCTUnwrap(
+      fetch(ComplianceRule.self, from: destinationContainer.mainContext).first
+    )
+    XCTAssertEqual(restoredRule.preferredOfficeISOWeekdays, [])
   }
 }

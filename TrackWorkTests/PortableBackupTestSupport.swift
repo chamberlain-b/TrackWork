@@ -104,6 +104,7 @@ extension PortableBackupServiceTests {
         requiredPercentage: 0.4,
         minimumOfficeMinutes: 210,
         selectedISOWeekdays: [1, 2, 3, 4, 5],
+        preferredOfficeISOWeekdays: [2, 4],
         effectiveFrom: date("2026-04-01"),
         createdAt: createdAt,
         updatedAt: updatedAt

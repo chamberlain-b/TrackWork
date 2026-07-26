@@ -48,6 +48,7 @@ struct DayCell: View {
     let selectedISOWeekdays: Set<Int>
     let calendar: Calendar
     let referenceDate: Date
+    let isPrimaryReview: Bool
 
     private var dayNumber: Int {
         calendar.component(.day, from: date)
@@ -91,16 +92,7 @@ struct DayCell: View {
             Spacer(minLength: 0)
 
             if let systemImage = presentation.systemImage {
-                Image(systemName: markerSystemImage(systemImage))
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(presentation.color)
-                    .frame(width: 28, height: 20)
-                    .background(
-                        presentation.kind == .review
-                            ? Color.clear
-                            : presentation.color.opacity(0.11),
-                        in: Capsule(style: .continuous)
-                    )
+                statusMarker(systemImage: systemImage)
             }
         }
         .padding(6)
@@ -121,12 +113,35 @@ struct DayCell: View {
         presentation.isQuiet ? Color.ds.textTertiary : Color.ds.textPrimary
     }
 
-    private func markerSystemImage(_ defaultImage: String) -> String {
-        presentation.kind == .review ? "exclamationmark.circle.fill" : defaultImage
+    @ViewBuilder
+    private func statusMarker(systemImage: String) -> some View {
+        if presentation.kind == .review, !isPrimaryReview {
+            Circle()
+                .fill(presentation.color)
+                .frame(width: 7, height: 7)
+                .frame(width: 28, height: 20)
+        } else {
+            Image(
+                systemName: presentation.kind == .review
+                    ? "exclamationmark.triangle.fill"
+                    : systemImage
+            )
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(presentation.color)
+            .frame(width: 28, height: 20)
+            .background(
+                presentation.kind == .review
+                    ? Color.clear
+                    : presentation.color.opacity(0.11),
+                in: Capsule(style: .continuous)
+            )
+        }
     }
 }
 
 struct CalendarAgendaRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let date: Date
     let attendanceDay: AttendanceDay?
     let leaveRecord: LeaveRecord?
@@ -152,30 +167,54 @@ struct CalendarAgendaRow: View {
     }
 
     var body: some View {
-        HStack(spacing: AppSpacing.sm) {
-            VStack(spacing: 2) {
-                Text(date.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(AppTypography.captionStrong)
-                    .foregroundStyle(Color.ds.textSecondary)
-                Text(date.formatted(.dateTime.day()))
-                    .font(AppTypography.smallMetric.monospacedDigit())
-                    .foregroundStyle(Color.ds.textPrimary)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: AppSpacing.sm) {
+                    HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                        Text(date.formatted(.dateTime.weekday(.abbreviated).day()))
+                            .font(AppTypography.headline)
+                            .foregroundStyle(Color.ds.textPrimary)
+
+                        Spacer(minLength: AppSpacing.sm)
+
+                        disclosureIndicator
+                    }
+
+                    HStack(spacing: AppSpacing.sm) {
+                        statusMarker
+
+                        Text(presentation.label)
+                            .font(AppTypography.body)
+                            .foregroundStyle(
+                                presentation.isQuiet ? Color.ds.textSecondary : Color.ds.textPrimary
+                            )
+                    }
+                }
+            } else {
+                HStack(spacing: AppSpacing.sm) {
+                    VStack(spacing: 2) {
+                        Text(date.formatted(.dateTime.weekday(.abbreviated)))
+                            .font(AppTypography.captionStrong)
+                            .foregroundStyle(Color.ds.textSecondary)
+                        Text(date.formatted(.dateTime.day()))
+                            .font(AppTypography.smallMetric.monospacedDigit())
+                            .foregroundStyle(Color.ds.textPrimary)
+                    }
+                    .frame(width: 48)
+
+                    statusMarker
+
+                    Text(presentation.label)
+                        .font(AppTypography.body)
+                        .foregroundStyle(
+                            presentation.isQuiet ? Color.ds.textSecondary : Color.ds.textPrimary
+                        )
+
+                    Spacer(minLength: AppSpacing.sm)
+
+                    disclosureIndicator
+                }
             }
-            .frame(width: 48)
-
-            Circle()
-                .fill(presentation.color)
-                .frame(width: 9, height: 9)
-
-            Text(presentation.label)
-                .font(AppTypography.body)
-                .foregroundStyle(presentation.isQuiet ? Color.ds.textSecondary : Color.ds.textPrimary)
-
-            Spacer(minLength: AppSpacing.sm)
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.ds.textTertiary)
         }
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)
@@ -190,5 +229,19 @@ struct CalendarAgendaRow: View {
         .accessibilityValue(presentation.label)
         .accessibilityHint("Opens attendance details")
         .accessibilityIdentifier(calendar.calendarDayAccessibilityIdentifier(for: date))
+    }
+
+    private var statusMarker: some View {
+        Circle()
+            .fill(presentation.color)
+            .frame(width: 9, height: 9)
+            .accessibilityHidden(true)
+    }
+
+    private var disclosureIndicator: some View {
+        Image(systemName: "chevron.right")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(Color.ds.textTertiary)
+            .accessibilityHidden(true)
     }
 }

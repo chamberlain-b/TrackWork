@@ -59,6 +59,7 @@ extension PortableBackupArchive.ComplianceRuleRecord {
       prorateFixedTargetForLeave: model.prorateFixedTargetForLeave,
       minimumOfficeMinutes: model.minimumOfficeMinutes,
       selectedISOWeekdays: model.selectedISOWeekdays,
+      preferredOfficeISOWeekdays: model.preferredOfficeISOWeekdays,
       effectiveFrom: model.effectiveFrom,
       createdAt: model.createdAt,
       updatedAt: model.updatedAt

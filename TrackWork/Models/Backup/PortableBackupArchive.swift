@@ -187,6 +187,7 @@ extension PortableBackupArchive {
     let prorateFixedTargetForLeave: Bool
     let minimumOfficeMinutes: Int
     let selectedISOWeekdays: [Int]
+    let preferredOfficeISOWeekdays: [Int]?
     let effectiveFrom: Date?
     let createdAt: Date
     let updatedAt: Date

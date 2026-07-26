@@ -54,6 +54,14 @@ final class CalendarDayPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.label, "Needs review")
     }
 
+    func testScheduledCurrentDayDoesNotNeedReviewYet() {
+        let presentation = makePresentation(date: referenceDate)
+
+        assertKind(presentation, is: .upcoming)
+        XCTAssertNil(presentation.systemImage)
+        XCTAssertEqual(presentation.label, "Upcoming workday")
+    }
+
     func testPastNonSelectedWeekdayIsNotRequired() {
         let presentation = makePresentation(
             date: date(year: 2026, month: 7, day: 11)

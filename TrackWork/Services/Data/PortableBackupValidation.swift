@@ -91,9 +91,13 @@ extension PortableBackupService {
           "A compliance rule contains unknown identity values.")
       }
       let weekdays = Set(record.selectedISOWeekdays)
+      let preferredWeekdays = Set(record.preferredOfficeISOWeekdays ?? [])
       guard !weekdays.isEmpty,
         weekdays.count == record.selectedISOWeekdays.count,
         weekdays.allSatisfy({ (1...7).contains($0) }),
+        preferredWeekdays.count == (record.preferredOfficeISOWeekdays ?? []).count,
+        preferredWeekdays.allSatisfy({ (1...7).contains($0) }),
+        preferredWeekdays.isSubset(of: weekdays),
         record.minimumOfficeMinutes >= 0,
         record.fixedRequiredDays.map({ $0 >= 0 }) ?? true,
         record.requiredPercentage.map({ $0.isFinite && (0...1).contains($0) }) ?? true

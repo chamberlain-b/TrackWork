@@ -207,7 +207,7 @@ private extension CalendarDayPresentation {
             )
         }
         if context.calendar.startOfDay(for: context.date)
-            > context.calendar.startOfDay(for: context.referenceDate) {
+            >= context.calendar.startOfDay(for: context.referenceDate) {
             return Resolved(
                 kind: .upcoming,
                 systemImage: nil,

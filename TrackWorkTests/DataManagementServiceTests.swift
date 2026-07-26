@@ -118,6 +118,7 @@ final class DataManagementServiceTests: XCTestCase {
         XCTAssertEqual(rules.count, 1)
         XCTAssertEqual(rules.first?.country, .australia)
         XCTAssertEqual(rules.first?.selectedISOWeekdays, [1, 2, 3, 4, 5])
+        XCTAssertEqual(rules.first?.preferredOfficeISOWeekdays, [])
     }
 
     func testGeneratedExportStoreRejectsTraversalAndUnmanagedDeletion() throws {

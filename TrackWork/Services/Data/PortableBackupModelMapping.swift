@@ -124,6 +124,7 @@ extension PortableBackupService {
     model.prorateFixedTargetForLeave = record.prorateFixedTargetForLeave
     model.minimumOfficeMinutes = record.minimumOfficeMinutes
     model.selectedISOWeekdays = record.selectedISOWeekdays
+    model.preferredOfficeISOWeekdays = record.preferredOfficeISOWeekdays ?? []
     model.effectiveFrom = record.effectiveFrom
     model.createdAt = record.createdAt
     model.updatedAt = record.updatedAt
@@ -149,6 +150,7 @@ extension PortableBackupService {
       prorateFixedTargetForLeave: record.prorateFixedTargetForLeave,
       minimumOfficeMinutes: record.minimumOfficeMinutes,
       selectedISOWeekdays: record.selectedISOWeekdays,
+      preferredOfficeISOWeekdays: record.preferredOfficeISOWeekdays ?? [],
       effectiveFrom: record.effectiveFrom,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt

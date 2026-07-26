@@ -283,6 +283,8 @@ extension DashboardView {
                                 completedOfficeDays: summary.completedOfficeDays,
                                 businessDaysToDate: summary.eligibleDaysToDate,
                                 remainingOfficeDays: summary.officeDaysNeeded,
+                                requiredOfficeDays: summary.requiredOfficeDays,
+                                reviewCount: reviewDates.count,
                                 currentCompliance: summary.officeShareToDate,
                                 status: dashboardStatus,
                                 targetIsConfigured: hasConfiguredTarget

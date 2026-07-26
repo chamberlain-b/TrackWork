@@ -3,7 +3,9 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(LocationTrackingService.self) private var locationTrackingService
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
+    @Query(sort: \Place.typeRaw) private var places: [Place]
     @State private var editingRule: ComplianceRule?
     @State private var saveError: String?
 
@@ -107,9 +109,28 @@ struct SettingsView: View {
         }
     }
 
+    private var preferredOfficeDaySelections: [SettingsWorkdaySelection] {
+        let selectedWorkdays = Set(activeRule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5])
+        return workdays
+            .filter { selectedWorkdays.contains($0.id) }
+            .map { workday in
+                SettingsWorkdaySelection(
+                    id: workday.id,
+                    name: workday.name,
+                    isSelected: preferredOfficeDaySelection(for: workday.id)
+                )
+            }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                SettingsSetupSummarySection(
+                    target: targetSummary,
+                    workdays: workdaysSummary,
+                    region: regionSummary,
+                    automaticAttendance: automaticAttendanceSummary
+                )
                 SettingsComplianceRuleSection(
                     requirementType: requirementTypeSelection,
                     fixedRequiredDays: fixedRequiredDaysBinding,
@@ -118,7 +139,8 @@ struct SettingsView: View {
                 )
                 SettingsWorkScheduleSection(
                     minimumOfficeMinutes: minimumOfficeMinutesBinding,
-                    workdays: workdaySelections
+                    workdays: workdaySelections,
+                    preferredOfficeDays: preferredOfficeDaySelections
                 )
                 SettingsRegionSection(
                     availableJurisdictions: availableJurisdictions,
@@ -235,6 +257,36 @@ struct SettingsView: View {
         }
 
         rule.selectedISOWeekdays = selectedWeekdays.sorted()
+        rule.preferredOfficeISOWeekdays = rule.preferredOfficeISOWeekdays.filter {
+            selectedWeekdays.contains($0)
+        }
+        persist(rule)
+    }
+
+    private func preferredOfficeDaySelection(for weekday: Int) -> Binding<Bool> {
+        Binding(
+            get: {
+                activeRule?.preferredOfficeISOWeekdays.contains(weekday) ?? false
+            },
+            set: { isSelected in
+                updatePreferredOfficeDay(weekday, isSelected: isSelected)
+            }
+        )
+    }
+
+    private func updatePreferredOfficeDay(_ weekday: Int, isSelected: Bool) {
+        let rule = ruleForEditing()
+        guard rule.selectedISOWeekdays.contains(weekday) else {
+            return
+        }
+
+        var preferredWeekdays = Set(rule.preferredOfficeISOWeekdays)
+        if isSelected {
+            preferredWeekdays.insert(weekday)
+        } else {
+            preferredWeekdays.remove(weekday)
+        }
+        rule.preferredOfficeISOWeekdays = preferredWeekdays.sorted()
         persist(rule)
     }
 
@@ -283,9 +335,45 @@ struct SettingsView: View {
         }
     }
 
+    private var targetSummary: String {
+        guard let rule = activeRule else {
+            return "Not set"
+        }
+
+        switch rule.requirementType ?? .fixedMonthlyDays {
+        case .fixedMonthlyDays:
+            let days = rule.fixedRequiredDays ?? 0
+            return days == 1 ? "1 day/month" : "\(days) days/month"
+        case .percentageOfEligibleDays:
+            return (rule.requiredPercentage ?? 0)
+                .formatted(.percent.precision(.fractionLength(0...1)))
+        }
+    }
+
+    private var workdaysSummary: String {
+        SettingsWeekdaySummary.text(
+            for: activeRule?.selectedISOWeekdays ?? [1, 2, 3, 4, 5],
+            from: workdays
+        )
+    }
+
+    private var regionSummary: String {
+        JurisdictionCatalog.jurisdictions(for: selectedCountry)
+            .first { $0.id == selectedJurisdictionId }?
+            .displayName
+            ?? "Not set"
+    }
+
+    private var automaticAttendanceSummary: String {
+        if locationTrackingService.isAutomaticTrackingEnabled {
+            return "On"
+        }
+        return places.contains(where: \.isActive) ? "Off" : "Not set up"
+    }
 }
 
 #Preview {
     SettingsView()
         .modelContainer(PreviewData.modelContainer())
+        .environment(LocationTrackingService())
 }

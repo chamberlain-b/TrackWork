@@ -51,7 +51,7 @@ struct CalendarLegendGrid: View {
             LegendPill(text: "Holiday", systemImage: "sparkles", color: Color.ds.publicHoliday)
             LegendPill(text: "Excluded", systemImage: "calendar.badge.minus", color: Color.ds.textSecondary)
             LegendPill(text: "Planned", systemImage: "calendar.badge.clock", color: Color.ds.accentPrimary)
-            LegendPill(text: "Review", systemImage: "exclamationmark", color: Color.ds.warning)
+            LegendPill(text: "Needs review", systemImage: "circle.fill", color: Color.ds.warning)
         }
     }
 }

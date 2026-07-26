@@ -20,7 +20,7 @@ struct AutomaticLocationTrackingView: View {
                     .foregroundStyle(statusColor)
                     .accessibilityIdentifier("automaticTracking.status")
 
-                Text(trackingService.statusDescription)
+                Text(statusDetail)
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
 
@@ -30,7 +30,7 @@ struct AutomaticLocationTrackingView: View {
                         actionMessage = "Automatic Attendance is off."
                     }
                     .accessibilityIdentifier("automaticTracking.disable")
-                } else {
+                } else if !activePlaces.isEmpty {
                     setupAction
                 }
 
@@ -42,23 +42,30 @@ struct AutomaticLocationTrackingView: View {
             } header: {
                 Text("Status")
             } footer: {
-                Text("Uses saved-area boundaries, not continuous GPS. Background events require Always access.")
+                Text(statusFooter)
             }
 
-            Section("Saved Areas") {
-                if activePlaces.isEmpty {
-                    ContentUnavailableView(
-                        "No active places",
-                        systemImage: "mappin.slash",
-                        description: Text("Save at least one home or office area before enabling automation.")
-                    )
-
+            if activePlaces.isEmpty {
+                Section {
                     NavigationLink {
                         LocationSetupView()
                     } label: {
-                        Label("Set Up Places", systemImage: "mappin.and.ellipse")
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            Label("Add a home or office", systemImage: "mappin.and.ellipse")
+                                .font(AppTypography.headline)
+
+                            Text("Define where attendance can be detected.")
+                                .font(AppTypography.caption)
+                                .foregroundStyle(Color.ds.textSecondary)
+                        }
+                        .padding(.vertical, AppSpacing.xxs)
                     }
-                } else {
+                    .accessibilityIdentifier("automaticTracking.setupPlaces")
+                } header: {
+                    Text("Get Started")
+                }
+            } else {
+                Section("Saved Areas") {
                     ForEach(activePlaces) { place in
                         LabeledContent {
                             Text("\(place.radiusMeters.formatted(.number.precision(.fractionLength(0)))) m")
@@ -71,16 +78,16 @@ struct AutomaticLocationTrackingView: View {
 
             Section {
                 Label(
-                    "Manual changes take priority.",
+                    "Uses saved-area boundaries, not continuous GPS.",
+                    systemImage: "location.square"
+                )
+                Label(
+                    "Manual changes always take priority.",
                     systemImage: "hand.tap.fill"
                 )
                 Label(
-                    "iOS can delay or miss boundary events.",
+                    "iOS may delay some boundary events.",
                     systemImage: "exclamationmark.triangle.fill"
-                )
-                Label(
-                    "Events stay on this device and are excluded from standard reports and backups.",
-                    systemImage: "lock.fill"
                 )
 
                 NavigationLink {
@@ -90,7 +97,9 @@ struct AutomaticLocationTrackingView: View {
                 }
                 .accessibilityIdentifier("automaticTracking.events")
             } header: {
-                Text("Notes")
+                Text("Privacy and Control")
+            } footer: {
+                Text("Location events stay on this device and are excluded from standard reports.")
             }
         }
         .navigationTitle("Automatic Attendance")
@@ -160,13 +169,51 @@ struct AutomaticLocationTrackingView: View {
             return "Automation needs attention"
         }
 
+        if activePlaces.isEmpty {
+            return "Not set up"
+        }
+
         return "Automatic attendance is off"
+    }
+
+    private var statusDetail: String {
+        if trackingService.isAutomaticTrackingEnabled {
+            return trackingService.statusDescription
+        }
+
+        if activePlaces.isEmpty {
+            return "No places or location access configured."
+        }
+
+        switch trackingService.authorizationStatus {
+        case .notDetermined:
+            return "Your places are ready. Allow location access to continue."
+        case .authorizedWhenInUse:
+            return "Allow Always access so iOS can detect arrivals in the background."
+        case .authorizedAlways:
+            return "Location access is ready. Turn on automatic attendance when you’re ready."
+        case .denied, .restricted:
+            return "Location access is off. Manual attendance still works."
+        @unknown default:
+            return "Location permission is unavailable. Manual attendance still works."
+        }
+    }
+
+    private var statusFooter: String {
+        activePlaces.isEmpty
+            ? "Nothing is tracked until you finish setup."
+            : "Background attendance requires Always location access."
     }
 
     private var statusSystemImage: String {
         if case .monitoring = trackingService.trackingStatus {
             return "checkmark.circle.fill"
         }
+
+        if activePlaces.isEmpty {
+            return "mappin.and.ellipse"
+        }
+
         return trackingService.isAutomaticTrackingEnabled
             ? "exclamationmark.triangle.fill"
             : "location.slash"
@@ -176,6 +223,11 @@ struct AutomaticLocationTrackingView: View {
         if case .monitoring = trackingService.trackingStatus {
             return Color.ds.success
         }
+
+        if activePlaces.isEmpty {
+            return Color.ds.accentPrimary
+        }
+
         return trackingService.isAutomaticTrackingEnabled ? Color.ds.warning : Color.ds.textSecondary
     }
 }

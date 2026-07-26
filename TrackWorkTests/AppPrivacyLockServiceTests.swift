@@ -140,3 +140,51 @@ private final class FakeDeviceOwnerAuthenticator: DeviceOwnerAuthenticationProvi
         return authenticationResult
     }
 }
+
+@MainActor
+final class WorkTrackAppIntentTests: XCTestCase {
+    func testRecordTodayIntentSubmitsSelectedStatus() async throws {
+        resetRouter()
+        let intent = RecordTodayIntent()
+        intent.status = .office
+
+        _ = try await intent.perform()
+
+        let handoff = try XCTUnwrap(WorkTrackAppIntentRouter.shared.pendingHandoff)
+        XCTAssertEqual(handoff.action, .recordToday(status: .office))
+        WorkTrackAppIntentRouter.shared.clearHandoff(id: handoff.id)
+    }
+
+    func testReviewPendingDaysIntentSubmitsReviewAction() async throws {
+        resetRouter()
+
+        _ = try await ReviewPendingDaysIntent().perform()
+
+        let handoff = try XCTUnwrap(WorkTrackAppIntentRouter.shared.pendingHandoff)
+        XCTAssertEqual(handoff.action, .reviewPendingDays)
+        WorkTrackAppIntentRouter.shared.clearHandoff(id: handoff.id)
+    }
+
+    func testClearingStaleHandoffDoesNotDiscardNewerAction() throws {
+        resetRouter()
+        let router = WorkTrackAppIntentRouter.shared
+        router.submit(.recordToday(status: .home))
+        let staleHandoff = try XCTUnwrap(router.pendingHandoff)
+        router.submit(.reviewPendingDays)
+        let currentHandoff = try XCTUnwrap(router.pendingHandoff)
+
+        router.clearHandoff(id: staleHandoff.id)
+
+        XCTAssertEqual(router.pendingHandoff?.id, currentHandoff.id)
+        XCTAssertEqual(router.pendingHandoff?.action, .reviewPendingDays)
+        router.clearHandoff(id: currentHandoff.id)
+    }
+
+    private func resetRouter() {
+        guard let handoff = WorkTrackAppIntentRouter.shared.pendingHandoff else {
+            return
+        }
+
+        WorkTrackAppIntentRouter.shared.clearHandoff(id: handoff.id)
+    }
+}

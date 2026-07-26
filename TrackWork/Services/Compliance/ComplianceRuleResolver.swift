@@ -44,6 +44,7 @@ struct ComplianceRuleResolver {
             prorateFixedTargetForLeave: rule.prorateFixedTargetForLeave,
             minimumOfficeMinutes: rule.minimumOfficeMinutes,
             selectedISOWeekdays: rule.selectedISOWeekdays,
+            preferredOfficeISOWeekdays: rule.preferredOfficeISOWeekdays,
             effectiveFrom: effectiveFrom,
             createdAt: now,
             updatedAt: now

@@ -23,6 +23,10 @@ enum AppLaunchConfiguration {
 @MainActor
 enum AppModelContainer {
     static func make() -> ModelContainer {
+        if AppLaunchConfiguration.isUITesting {
+            UserDefaults.standard.removeObject(forKey: "calendar.displayMode")
+        }
+
         let schema = Schema([
             AttendanceDay.self,
             LeaveRecord.self,

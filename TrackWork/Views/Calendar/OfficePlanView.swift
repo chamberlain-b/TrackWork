@@ -17,6 +17,7 @@ struct OfficePlanView: View {
     private let calendar = Calendar.workTrackCalendar
     private let evaluator = CompliancePeriodEvaluator()
     private let ruleResolver = ComplianceRuleResolver()
+    private let suggestionService = OfficePlanSuggestionService()
 
     init(displayedMonth: Date? = nil, referenceDate: Date = .now) {
         self.displayedMonth = displayedMonth ?? referenceDate
@@ -110,6 +111,10 @@ struct OfficePlanView: View {
         )
     }
 
+    private var preferredISOWeekdays: Set<Int> {
+        Set(activeRule.preferredOfficeISOWeekdays)
+    }
+
     private var remainingOfficeDays: Int {
         summary.officeDaysNeeded
     }
@@ -139,6 +144,8 @@ struct OfficePlanView: View {
                         }
                     }
 
+                    planningMetrics
+
                     Text("Plans are reminders. Only confirmed attendance counts.")
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.textSecondary)
@@ -151,7 +158,9 @@ struct OfficePlanView: View {
                         )
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.warning)
-                    } else if remainingOfficeDays > candidateDates.count {
+                    }
+
+                    if remainingOfficeDays > candidateDates.count {
                         Label(
                             unreachableTargetMessage,
                             systemImage: "exclamationmark.triangle.fill"
@@ -189,9 +198,15 @@ struct OfficePlanView: View {
                             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                                 Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                                     .font(AppTypography.headline)
-                                Text(selectedDates.contains(date) ? "Planned" : "Available")
-                                    .font(AppTypography.caption)
-                                    .foregroundStyle(Color.ds.textSecondary)
+                                HStack(spacing: AppSpacing.xs) {
+                                    Text(selectedDates.contains(date) ? "Planned" : "Available")
+
+                                    if isPreferred(date) {
+                                        Label("Preferred", systemImage: "star.fill")
+                                    }
+                                }
+                                .font(AppTypography.caption)
+                                .foregroundStyle(Color.ds.textSecondary)
                             }
                         }
                         .tint(Color.ds.accentPrimary)
@@ -232,11 +247,19 @@ struct OfficePlanView: View {
     }
 
     private func suggestPlan() {
-        let datesToAdd = candidateDates
-            .filter { !selectedDates.contains($0) }
-            .prefix(additionalPlansNeeded)
+        let datesToAdd = suggestionService.suggestedDates(
+            from: candidateDates,
+            excluding: selectedDates,
+            count: additionalPlansNeeded,
+            preferredISOWeekdays: preferredISOWeekdays,
+            calendar: calendar
+        )
         datesToAdd.forEach { modelContext.insert(PlannedOfficeDay(date: $0)) }
         persist()
+    }
+
+    private func isPreferred(_ date: Date) -> Bool {
+        preferredISOWeekdays.contains(calendar.isoWeekday(for: date))
     }
 
     private func clearPlan() {
@@ -258,12 +281,47 @@ struct OfficePlanView: View {
 }
 
 private extension OfficePlanView {
+    var planningMetrics: some View {
+        HStack(spacing: 0) {
+            OfficePlanMetric(
+                title: "Needed",
+                value: remainingOfficeDays,
+                accessibilityIdentifier: "officePlan.needed"
+            )
+
+            Divider()
+                .frame(height: 34)
+
+            OfficePlanMetric(
+                title: "Available",
+                value: candidateDates.count,
+                accessibilityIdentifier: "officePlan.available"
+            )
+
+            Divider()
+                .frame(height: 34)
+
+            OfficePlanMetric(
+                title: "Planned",
+                value: plannedCandidateDays,
+                accessibilityIdentifier: "officePlan.planned"
+            )
+        }
+        .padding(.vertical, AppSpacing.xs)
+        .background(
+            Color.ds.surfaceSecondary,
+            in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
+        )
+        .accessibilityElement(children: .contain)
+    }
+
     var remainingDaysLabel: some View {
         Label(
             remainingDaysText,
             systemImage: "target"
         )
         .font(AppTypography.headline)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     var remainingDaysText: String {
@@ -310,7 +368,30 @@ private extension OfficePlanView {
     var reviewRequiredMessage: String {
         let count = summary.reviewRequiredDays
         let dayLabel = count == 1 ? "1 day still needs" : "\(count) days still need"
-        return "\(dayLabel) review, so this plan may change."
+        return "Based on confirmed attendance. \(dayLabel) review, so this plan may change."
+    }
+}
+
+private struct OfficePlanMetric: View {
+    let title: String
+    let value: Int
+    let accessibilityIdentifier: String
+
+    var body: some View {
+        VStack(spacing: AppSpacing.xxs) {
+            Text(value, format: .number)
+                .font(AppTypography.smallMetric.monospacedDigit())
+                .foregroundStyle(Color.ds.textPrimary)
+
+            Text(title)
+                .font(AppTypography.caption)
+                .foregroundStyle(Color.ds.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value.formatted())
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 

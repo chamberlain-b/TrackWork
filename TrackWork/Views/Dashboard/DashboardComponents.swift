@@ -83,6 +83,8 @@ struct ComplianceHeroCard: View {
     let completedOfficeDays: Int
     let businessDaysToDate: Int
     let remainingOfficeDays: Int
+    let requiredOfficeDays: Int
+    let reviewCount: Int
     let currentCompliance: Double?
     let status: DashboardStatus
     let targetIsConfigured: Bool
@@ -90,9 +92,9 @@ struct ComplianceHeroCard: View {
     var body: some View {
         DSProgressCard(
             sectionTitle: monthTitle,
-            metricText: targetIsConfigured ? remainingOfficeDays.formatted() : "—",
+            metricText: targetIsConfigured ? primaryMetricText : "—",
             detailText: targetIsConfigured
-                ? remainingOfficeDaysLabel
+                ? primaryDetailText
                 : "Office target not set",
             progress: currentCompliance ?? 0,
             statusText: status.title,
@@ -102,15 +104,32 @@ struct ComplianceHeroCard: View {
             showsProgress: currentCompliance != nil,
             showsProgressPercentage: false,
             progressMetricTitle: currentCompliance != nil
-                ? "current compliance"
+                ? progressMetricTitle
                 : nil,
             progressTint: status.color,
-            progressAccessibilityLabel: "Month-to-date compliance",
+            progressAccessibilityLabel: reviewCount > 0
+                ? "Confirmed month-to-date compliance"
+                : "Month-to-date compliance",
             progressAccessibilityValue: currentCompliance != nil
                 ? currentComplianceAccessibilityValue
                 : nil
         )
         .accessibilityIdentifier("dashboard.hero")
+    }
+
+    private var primaryMetricText: String {
+        reviewCount > 0 ? reviewCount.formatted() : remainingOfficeDays.formatted()
+    }
+
+    private var primaryDetailText: String {
+        if reviewCount > 0 {
+            return reviewCount == 1 ? "day needs review" : "days need review"
+        }
+        return remainingOfficeDaysLabel
+    }
+
+    private var progressMetricTitle: String {
+        reviewCount > 0 ? "confirmed office rate" : "current compliance"
     }
 
     private var remainingOfficeDaysLabel: String {
@@ -130,6 +149,16 @@ struct ComplianceHeroCard: View {
     private var footerCaption: String {
         guard targetIsConfigured else {
             return "Set an office target in Settings."
+        }
+
+        if reviewCount > 0 {
+            let completedLabel = completedOfficeDays == 1
+                ? "1 confirmed office day"
+                : "\(completedOfficeDays) confirmed office days"
+            let targetLabel = requiredOfficeDays == 1
+                ? "Target: 1 day this month."
+                : "Target: \(requiredOfficeDays) days this month."
+            return "\(completedLabel). \(targetLabel)"
         }
 
         guard businessDaysToDate > 0 else {

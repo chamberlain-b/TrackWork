@@ -15,6 +15,8 @@ struct MonthCalendarView: View {
     @State private var displayedMonth: Date
     @State private var isShowingBatchLeave = false
     @State private var isShowingLegend = false
+    @AppStorage("calendar.displayMode") private var displayModeRaw =
+        CalendarDisplayMode.month.rawValue
 
     private let referenceDate: Date
     private let calendar = Calendar.workTrackCalendar
@@ -104,11 +106,47 @@ struct MonthCalendarView: View {
         return leadingBlanks + populatedDays + trailingBlanks
     }
 
+    private var displayMode: CalendarDisplayMode {
+        get {
+            guard !dynamicTypeSize.isAccessibilitySize else {
+                return .agenda
+            }
+            return CalendarDisplayMode(rawValue: displayModeRaw) ?? .month
+        }
+        nonmutating set {
+            displayModeRaw = newValue.rawValue
+        }
+    }
+
+    private var displayModeSelection: Binding<CalendarDisplayMode> {
+        Binding(
+            get: { displayMode },
+            set: { displayMode = $0 }
+        )
+    }
+
+    private var firstReviewDate: Date? {
+        calendarDays.first { day in
+            guard let date = day.date else {
+                return false
+            }
+            return presentation(for: day, date: date).kind == .review
+        }?.date
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: AppSpacing.lg) {
                     monthHeader
+                    displayModePicker
+
+                    CalendarMonthSummary(
+                        days: calendarDays,
+                        selectedISOWeekdays: selectedISOWeekdays,
+                        calendar: calendar,
+                        referenceDate: referenceDate
+                    )
 
                     if let holidayCoverageWarning {
                         DSInsightCallout(
@@ -119,7 +157,7 @@ struct MonthCalendarView: View {
                         .accessibilityIdentifier("calendar.holidayCoverageWarning")
                     }
 
-                    if dynamicTypeSize.isAccessibilitySize {
+                    if displayMode == .agenda {
                         agenda
                     } else {
                         calendarSurface
@@ -174,6 +212,26 @@ struct MonthCalendarView: View {
             VStack(alignment: .leading, spacing: AppSpacing.sm) {
                 monthHeading
                 monthControls
+            }
+        }
+    }
+
+    private var displayModePicker: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Picker("Calendar view", selection: displayModeSelection) {
+                ForEach(CalendarDisplayMode.allCases) { mode in
+                    Label(mode.title, systemImage: mode.systemImage)
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(dynamicTypeSize.isAccessibilitySize)
+            .accessibilityIdentifier("calendar.displayMode")
+
+            if dynamicTypeSize.isAccessibilitySize {
+                Text("Agenda view is used with larger text.")
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
             }
         }
     }
@@ -235,6 +293,7 @@ struct MonthCalendarView: View {
         .frame(maxWidth: .infinity)
         .id(monthStart)
         .transition(.opacity)
+        .accessibilityIdentifier("calendar.monthGrid")
     }
 
     private var weekdayHeader: some View {
@@ -264,7 +323,10 @@ struct MonthCalendarView: View {
                             plannedOfficeDay: day.plannedOfficeDay,
                             selectedISOWeekdays: selectedISOWeekdays,
                             calendar: calendar,
-                            referenceDate: referenceDate
+                            referenceDate: referenceDate,
+                            isPrimaryReview: firstReviewDate.map {
+                                calendar.isDate($0, inSameDayAs: date)
+                            } ?? false
                         )
                     }
                 } else {
@@ -300,6 +362,7 @@ struct MonthCalendarView: View {
         .cardSurface(includesShadow: false)
         .id(monthStart)
         .transition(.opacity)
+        .accessibilityIdentifier("calendar.agenda")
     }
 
     private func dayLink<Label: View>(
@@ -333,6 +396,23 @@ struct MonthCalendarView: View {
         )
     }
 
+    private func presentation(
+        for day: CalendarDay,
+        date: Date
+    ) -> CalendarDayPresentation {
+        CalendarDayPresentation(
+            date: date,
+            attendanceDay: day.attendanceDay,
+            leaveRecord: day.leaveRecord,
+            publicHoliday: day.publicHoliday,
+            customExcludedDay: day.customExcludedDay,
+            plannedOfficeDay: day.plannedOfficeDay,
+            selectedISOWeekdays: selectedISOWeekdays,
+            calendar: calendar,
+            referenceDate: referenceDate
+        )
+    }
+
     private func moveMonth(by offset: Int) {
         guard let nextMonth = calendar.date(byAdding: .month, value: offset, to: monthStart) else {
             return
@@ -352,6 +432,31 @@ struct MonthCalendarView: View {
             withAnimation(AppMotion.smooth) {
                 displayedMonth = date
             }
+        }
+    }
+}
+
+private enum CalendarDisplayMode: String, CaseIterable, Identifiable {
+    case month
+    case agenda
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .month:
+            "Month"
+        case .agenda:
+            "Agenda"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .month:
+            "calendar"
+        case .agenda:
+            "list.bullet"
         }
     }
 }
