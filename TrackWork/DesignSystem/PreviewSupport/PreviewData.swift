@@ -4,6 +4,7 @@ import SwiftData
 /// Deterministic sample data for SwiftUI previews and local development only.
 enum PreviewData {
     static let dashboardReferenceDate = date(year: 2026, month: 7, day: 15)
+    static let planConfidenceReferenceDate = date(year: 2026, month: 7, day: 29)
 
     static let sampleMonth = DateInterval(
         start: date(year: 2026, month: 7, day: 1),
@@ -177,6 +178,18 @@ enum PreviewData {
 
     @MainActor
     static func modelContainer() -> ModelContainer {
+        modelContainer(seed: seed)
+    }
+
+    @MainActor
+    static func planConfidenceModelContainer() -> ModelContainer {
+        modelContainer(seed: seedPlanConfidence)
+    }
+
+    @MainActor
+    private static func modelContainer(
+        seed: (ModelContext) -> Void
+    ) -> ModelContainer {
         let schema = Schema([
             AttendanceDay.self,
             LeaveRecord.self,
@@ -242,4 +255,86 @@ enum PreviewData {
         calendar.timeZone = timeZone
         return calendar
     }()
+}
+
+private extension PreviewData {
+    @MainActor
+    static func seedPlanConfidence(_ context: ModelContext) {
+        insertPlanConfidenceRule(in: context)
+        insertPlanConfidenceAttendance(in: context)
+        insertPlanConfidencePlan(in: context)
+    }
+
+    @MainActor
+    static func insertPlanConfidenceRule(in context: ModelContext) {
+        context.insert(
+            ComplianceRule(
+                id: fixedUUID("30000000-0000-0000-0000-000000000008"),
+                name: "Plan Confidence Preview",
+                country: .australia,
+                jurisdictionId: "AU-VIC",
+                requirementType: .fixedMonthlyDays,
+                fixedRequiredDays: 8,
+                requiredPercentage: nil,
+                prorateFixedTargetForLeave: true,
+                minimumOfficeMinutes: 180,
+                selectedISOWeekdays: [1, 2, 3, 4, 5],
+                createdAt: referenceTimestamp,
+                updatedAt: referenceTimestamp
+            )
+        )
+    }
+
+    @MainActor
+    static func insertPlanConfidenceAttendance(in context: ModelContext) {
+        let officeDates: Set<Date> = [
+            date(year: 2026, month: 7, day: 20),
+            date(year: 2026, month: 7, day: 21),
+            date(year: 2026, month: 7, day: 22),
+            date(year: 2026, month: 7, day: 23),
+            date(year: 2026, month: 7, day: 24),
+            date(year: 2026, month: 7, day: 27),
+            date(year: 2026, month: 7, day: 28)
+        ]
+
+        var candidate = date(year: 2026, month: 7, day: 1)
+        while candidate < planConfidenceReferenceDate {
+            if !previewCalendar.isDateInWeekend(candidate) {
+                let isOfficeDay = officeDates.contains(candidate)
+                context.insert(
+                    AttendanceDay(
+                        date: candidate,
+                        detectedClassification: isOfficeDay ? .office : .home,
+                        finalClassification: isOfficeDay ? .office : .home,
+                        complianceTreatment: isOfficeDay ? .countsAsOffice : .countsAsHome,
+                        officeMinutes: isOfficeDay ? 420 : 0,
+                        homeMinutes: isOfficeDay ? 0 : 420,
+                        createdAt: referenceTimestamp,
+                        updatedAt: referenceTimestamp
+                    )
+                )
+            }
+
+            guard let nextDate = previewCalendar.date(
+                byAdding: .day,
+                value: 1,
+                to: candidate
+            ) else {
+                break
+            }
+            candidate = nextDate
+        }
+    }
+
+    @MainActor
+    static func insertPlanConfidencePlan(in context: ModelContext) {
+        context.insert(
+            PlannedOfficeDay(
+                id: fixedUUID("60000000-0000-0000-0000-000000000001"),
+                date: date(year: 2026, month: 7, day: 30),
+                createdAt: referenceTimestamp,
+                updatedAt: referenceTimestamp
+            )
+        )
+    }
 }

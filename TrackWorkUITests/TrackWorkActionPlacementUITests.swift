@@ -34,9 +34,12 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
         let planOfficeDays = element(identifier: "calendar.officePlan")
         XCTAssertTrue(planOfficeDays.waitForExistence(timeout: 3))
         planOfficeDays.tap()
-        XCTAssertTrue(app.navigationBars["Plan Office Days"].waitForExistence(timeout: 5))
-        if let plannedDateLabel = Self.plannedOfficeDateLabel {
-            XCTAssertTrue(app.staticTexts[plannedDateLabel].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
+        if let plannedDate = Self.plannedOfficeDate {
+            let plannedDay = reveal(
+                identifier: "officePlan.day.\(Self.isoDate.string(from: plannedDate))"
+            )
+            XCTAssertEqual(plannedDay.value as? String, "Planned")
         }
         attachScreenshot(named: "Plan Office Days")
     }
@@ -60,6 +63,25 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
+    private func reveal(identifier: String, maxSwipes: Int = 8) -> XCUIElement {
+        let target = element(identifier: identifier)
+        for _ in 0...maxSwipes {
+            if target.exists {
+                return target
+            }
+            app.swipeUp()
+        }
+        for _ in 0...maxSwipes {
+            if target.exists {
+                return target
+            }
+            app.swipeDown()
+        }
+
+        XCTFail("Unable to reveal \(identifier)")
+        return target
+    }
+
     private static var plannedOfficeDate: Date? {
         let calendar = Calendar.autoupdatingCurrent
         let today = calendar.startOfDay(for: .now)
@@ -81,10 +103,6 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
 
     private static var plannedOfficeDayIdentifier: String? {
         plannedOfficeDate.map { "calendar.day.\(isoDate.string(from: $0))" }
-    }
-
-    private static var plannedOfficeDateLabel: String? {
-        plannedOfficeDate?.formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 
     private static let isoDate: DateFormatter = {

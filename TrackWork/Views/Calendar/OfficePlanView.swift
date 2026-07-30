@@ -2,241 +2,158 @@ import SwiftData
 import SwiftUI
 
 struct OfficePlanView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \AttendanceDay.date) private var attendanceDays: [AttendanceDay]
-    @Query(sort: \LeaveRecord.date) private var leaveRecords: [LeaveRecord]
-    @Query(sort: \PublicHoliday.date) private var publicHolidays: [PublicHoliday]
-    @Query(sort: \CustomExcludedDay.date) private var customExcludedDays: [CustomExcludedDay]
-    @Query(sort: \PlannedOfficeDay.date) private var plannedOfficeDays: [PlannedOfficeDay]
-    @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
+    @Query(sort: \AttendanceDay.date) var attendanceDays: [AttendanceDay]
+    @Query(sort: \LeaveRecord.date) var leaveRecords: [LeaveRecord]
+    @Query(sort: \PublicHoliday.date) var publicHolidays: [PublicHoliday]
+    @Query(sort: \CustomExcludedDay.date) var customExcludedDays: [CustomExcludedDay]
+    @Query(sort: \PlannedOfficeDay.date) var plannedOfficeDays: [PlannedOfficeDay]
+    @Query(sort: \ComplianceRule.createdAt) var complianceRules: [ComplianceRule]
+
+    @State private var displayedMonth: Date
+    @State private var collapsedWeekStarts: Set<Date> = []
+    @State private var isConfirmingReplan = false
+    @State private var isConfirmingUnavailableRemoval = false
     @State private var saveError: String?
 
-    private let displayedMonth: Date
-    private let referenceDate: Date
-    private let calendar = Calendar.workTrackCalendar
-    private let evaluator = CompliancePeriodEvaluator()
-    private let ruleResolver = ComplianceRuleResolver()
-    private let suggestionService = OfficePlanSuggestionService()
+    let referenceDate: Date
+    let calendar = Calendar.workTrackCalendar
+    let candidateDateCalculator = OfficePlanCandidateDateCalculator()
+    let evaluator = CompliancePeriodEvaluator()
+    let reconciliationService = OfficePlanReconciliationService()
+    let ruleResolver = ComplianceRuleResolver()
+    let suggestionService = OfficePlanSuggestionService()
 
     init(displayedMonth: Date? = nil, referenceDate: Date = .now) {
-        self.displayedMonth = displayedMonth ?? referenceDate
         self.referenceDate = referenceDate
+        _displayedMonth = State(initialValue: displayedMonth ?? referenceDate)
     }
 
-    private var range: ComplianceDateRange {
-        ComplianceDateRange(
-            start: calendar.complianceMonthStart(for: displayedMonth),
-            end: calendar.complianceMonthEnd(for: displayedMonth),
-            calendar: calendar
-        )
+    var displayedMonthValue: Date {
+        displayedMonth
     }
 
-    private var activeRule: ComplianceRule {
-        ruleResolver.rule(for: range.end, from: complianceRules) ?? ComplianceRule()
+    var usesAccessibilityAgenda: Bool {
+        dynamicTypeSize.isAccessibilitySize
     }
 
-    private var summary: ComplianceSummary {
-        evaluator.evaluate(
-            CompliancePeriodEvaluator.Input(
-                range: range,
-                calendar: calendar,
-                rule: activeRule,
-                attendanceDays: attendanceDays,
-                leaveRecords: leaveRecords,
-                publicHolidays: publicHolidays,
-                customExcludedDays: customExcludedDays,
-                evaluationDate: calendar.startOfDay(for: referenceDate)
-            )
-        )
-    }
-
-    private var candidateDates: [Date] {
-        let holidayDates = Set(
-            publicHolidays.compactMap { holiday -> Date? in
-                guard holiday.jurisdictionId == activeRule.jurisdictionId,
-                      range.contains(holiday.date, calendar: calendar) else {
-                    return nil
-                }
-                return calendar.startOfDay(for: holiday.date)
-            }
-        )
-        let eligibleBeforeLeave = BusinessDayCalculator().eligibleDates(
-            from: range.start,
-            through: range.end,
-            calendar: calendar,
-            selectedISOWeekdays: Set(activeRule.selectedISOWeekdays),
-            publicHolidays: holidayDates
-        )
-        let leaveDates = Set(
-            leaveRecords.compactMap { record -> Date? in
-                guard record.duration == .fullDay else { return nil }
-                let date = calendar.startOfDay(for: record.date)
-                return eligibleBeforeLeave.contains(date) ? date : nil
-            }
-        )
-        let exclusionDates = Set(
-            customExcludedDays.map { calendar.startOfDay(for: $0.date) }
-        )
-        let completedDates = Set(
-            attendanceDays.compactMap { day -> Date? in
-                let date = calendar.startOfDay(for: day.date)
-                guard range.contains(date, calendar: calendar) else { return nil }
-                switch day.finalClassification {
-                case .office:
-                    return date
-                case .mixed where day.officeMinutes >= activeRule.minimumOfficeMinutes:
-                    return date
-                default:
-                    return nil
-                }
-            }
-        )
-        let today = calendar.startOfDay(for: referenceDate)
-
-        return eligibleBeforeLeave
-            .subtracting(leaveDates)
-            .subtracting(exclusionDates)
-            .subtracting(completedDates)
-            .filter { $0 >= today }
-            .sorted()
-    }
-
-    private var selectedDates: Set<Date> {
-        Set(
-            plannedOfficeDays.compactMap { plan in
-                let date = calendar.startOfDay(for: plan.date)
-                return range.contains(date, calendar: calendar) ? date : nil
-            }
-        )
-    }
-
-    private var preferredISOWeekdays: Set<Int> {
-        Set(activeRule.preferredOfficeISOWeekdays)
-    }
-
-    private var remainingOfficeDays: Int {
-        summary.officeDaysNeeded
-    }
-
-    private var additionalPlansNeeded: Int {
-        max(0, remainingOfficeDays - plannedCandidateDays)
-    }
-
-    private var plannedCandidateDays: Int {
-        selectedDates.intersection(Set(candidateDates)).count
+    func isWeekCollapsed(_ week: OfficePlanWeek) -> Bool {
+        collapsedWeekStarts.contains(week.start)
     }
 
     var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: AppSpacing.sm) {
-                            remainingDaysLabel
-                            Spacer(minLength: AppSpacing.xs)
-                            planStatus
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: AppSpacing.lg) {
+                Text("Plan Office Days")
+                    .font(AppTypography.title)
+                    .foregroundStyle(Color.ds.textSecondary)
 
-                        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                            remainingDaysLabel
-                            planStatus
-                        }
-                    }
+                referenceDateMenu
+                planSurface
 
-                    planningMetrics
-
-                    Text("Plans are reminders. Only confirmed attendance counts.")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if summary.reviewRequiredDays > 0 {
-                        Label(
-                            reviewRequiredMessage,
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.warning)
-                    }
-
-                    if remainingOfficeDays > candidateDates.count {
-                        Label(
-                            unreachableTargetMessage,
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.critical)
-                    }
-                }
-                .padding(.vertical, AppSpacing.xxs)
-            }
-
-            Section {
-                Button("Suggest Days", systemImage: "wand.and.stars") {
-                    suggestPlan()
-                }
-                .disabled(additionalPlansNeeded == 0 || candidateDates.isEmpty)
-                .accessibilityIdentifier("officePlan.suggest")
-
-                Button("Clear Plan", systemImage: "xmark.circle", role: .destructive) {
-                    clearPlan()
-                }
-                .disabled(selectedDates.isEmpty)
-            }
-
-            Section("Available days") {
-                if candidateDates.isEmpty {
-                    ContentUnavailableView(
-                        "No eligible days available",
-                        systemImage: "calendar.badge.exclamationmark",
-                        description: Text("No workdays remain after leave, holidays, exclusions and attendance.")
-                    )
-                } else {
-                    ForEach(candidateDates, id: \.self) { date in
-                        Toggle(isOn: selectionBinding(for: date)) {
-                            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                                Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                                    .font(AppTypography.headline)
-                                HStack(spacing: AppSpacing.xs) {
-                                    Text(selectedDates.contains(date) ? "Planned" : "Available")
-
-                                    if isPreferred(date) {
-                                        Label("Preferred", systemImage: "star.fill")
-                                    }
-                                }
-                                .font(AppTypography.caption)
-                                .foregroundStyle(Color.ds.textSecondary)
-                            }
-                        }
-                        .tint(Color.ds.accentPrimary)
-                        .accessibilityIdentifier("officePlan.\(calendar.calendarDayAccessibilityIdentifier(for: date))")
-                    }
-                }
-            }
-
-            if let saveError {
-                Section {
+                if let saveError {
                     Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                        .font(AppTypography.callout)
                         .foregroundStyle(Color.ds.critical)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("officePlan.saveError")
                 }
+            }
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+            .padding(.bottom, AppSpacing.xl)
+        }
+        .appScreenBackground()
+        .navigationTitle("Adaptive Month Plan")
+        .navigationBarTitleDisplayMode(.large)
+        .accessibilityIdentifier("officePlan.screen")
+        .confirmationDialog(
+            "Re-plan \(monthTitle)?",
+            isPresented: $isConfirmingReplan,
+            titleVisibility: .visible
+        ) {
+            Button("Replace plan", role: .destructive) {
+                replanMonth()
+            }
+            .accessibilityIdentifier("officePlan.confirmReplan")
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This replaces planned office days in \(monthTitle). "
+                    + "Notes on dates that change are removed. Attendance is unchanged."
+            )
+        }
+        .confirmationDialog(
+            "Remove unavailable plans?",
+            isPresented: $isConfirmingUnavailableRemoval,
+            titleVisibility: .visible
+        ) {
+            Button(removeUnavailablePlansTitle, role: .destructive) {
+                removeUnavailablePlans()
+            }
+            .accessibilityIdentifier("officePlan.confirmUnavailableRemoval")
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This removes unavailable reminders and any notes attached to them. "
+                    + "Attendance is unchanged."
+            )
+        }
+    }
+}
+
+extension OfficePlanView {
+    func toggleWeek(_ week: OfficePlanWeek) {
+        if collapsedWeekStarts.contains(week.start) {
+            collapsedWeekStarts.remove(week.start)
+        } else {
+            collapsedWeekStarts.insert(week.start)
+        }
+    }
+
+    func moveMonth(by offset: Int) {
+        guard let month = calendar.date(byAdding: .month, value: offset, to: range.start) else {
+            return
+        }
+        updateDisplayedMonth(month)
+    }
+
+    func showReferenceMonth() {
+        updateDisplayedMonth(referenceDate)
+    }
+
+    func updateDisplayedMonth(_ month: Date) {
+        collapsedWeekStarts.removeAll()
+        if reduceMotion {
+            displayedMonth = month
+        } else {
+            withAnimation(AppMotion.smooth) {
+                displayedMonth = month
             }
         }
-        .navigationTitle("Plan Office Days")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func selectionBinding(for date: Date) -> Binding<Bool> {
-        Binding(
-            get: { selectedDates.contains(date) },
-            set: { isSelected in updatePlan(for: date, isSelected: isSelected) }
-        )
+    func requestReplan() {
+        isConfirmingReplan = true
     }
 
-    private func updatePlan(for date: Date, isSelected: Bool) {
+    func updatePlan(for date: Date, isSelected: Bool) {
         let normalizedDate = calendar.startOfDay(for: date)
+        guard candidateDateSet.contains(normalizedDate) else {
+            return
+        }
+
         if isSelected {
-            guard !selectedDates.contains(normalizedDate) else { return }
+            guard !selectedDates.contains(normalizedDate),
+                  !plannedOfficeDays.contains(where: {
+                      calendar.isDate($0.date, inSameDayAs: normalizedDate)
+                  }) else {
+                return
+            }
             modelContext.insert(PlannedOfficeDay(date: normalizedDate))
         } else {
             plannedOfficeDays
@@ -246,30 +163,63 @@ struct OfficePlanView: View {
         persist()
     }
 
-    private func suggestPlan() {
-        let datesToAdd = suggestionService.suggestedDates(
+    func suggestPlan() {
+        let datesToAdd = suggestionService.balancedSuggestedDates(
             from: candidateDates,
             excluding: selectedDates,
             count: additionalPlansNeeded,
             preferredISOWeekdays: preferredISOWeekdays,
             calendar: calendar
         )
-        datesToAdd.forEach { modelContext.insert(PlannedOfficeDay(date: $0)) }
+        datesToAdd
+            .filter { date in
+                !plannedOfficeDays.contains {
+                    calendar.isDate($0.date, inSameDayAs: date)
+                }
+            }
+            .forEach { modelContext.insert(PlannedOfficeDay(date: $0)) }
         persist()
     }
 
-    private func isPreferred(_ date: Date) -> Bool {
-        preferredISOWeekdays.contains(calendar.isoWeekday(for: date))
-    }
-
-    private func clearPlan() {
-        plannedOfficeDays
-            .filter { range.contains($0.date, calendar: calendar) }
-            .forEach(modelContext.delete)
+    func removeUnavailablePlans() {
+        invalidSelectedPlans.forEach(modelContext.delete)
         persist()
     }
 
-    private func persist() {
+    func requestUnavailablePlanRemoval() {
+        guard unavailableRemovalNeedsConfirmation else {
+            removeUnavailablePlans()
+            return
+        }
+        isConfirmingUnavailableRemoval = true
+    }
+
+    func replanMonth() {
+        let refreshedDates = suggestionService.balancedSuggestedDates(
+            from: candidateDates,
+            excluding: [],
+            count: remainingOfficeDays,
+            preferredISOWeekdays: preferredISOWeekdays,
+            calendar: calendar
+        )
+        reconcilePlan(with: refreshedDates)
+        persist()
+    }
+
+    func reconcilePlan(with refreshedDates: [Date]) {
+        let reconciliation = reconciliationService.changes(
+            existingPlans: plannedOfficeDays,
+            desiredDates: refreshedDates,
+            range: range,
+            calendar: calendar
+        )
+        reconciliation.plansToDelete.forEach(modelContext.delete)
+        reconciliation.datesToInsert.forEach {
+            modelContext.insert(PlannedOfficeDay(date: $0))
+        }
+    }
+
+    func persist() {
         do {
             try modelContext.save()
             saveError = nil
@@ -277,121 +227,6 @@ struct OfficePlanView: View {
             modelContext.rollback()
             saveError = "Your office plan could not be saved. Try again."
         }
-    }
-}
-
-private extension OfficePlanView {
-    var planningMetrics: some View {
-        HStack(spacing: 0) {
-            OfficePlanMetric(
-                title: "Needed",
-                value: remainingOfficeDays,
-                accessibilityIdentifier: "officePlan.needed"
-            )
-
-            Divider()
-                .frame(height: 34)
-
-            OfficePlanMetric(
-                title: "Available",
-                value: candidateDates.count,
-                accessibilityIdentifier: "officePlan.available"
-            )
-
-            Divider()
-                .frame(height: 34)
-
-            OfficePlanMetric(
-                title: "Planned",
-                value: plannedCandidateDays,
-                accessibilityIdentifier: "officePlan.planned"
-            )
-        }
-        .padding(.vertical, AppSpacing.xs)
-        .background(
-            Color.ds.surfaceSecondary,
-            in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
-        )
-        .accessibilityElement(children: .contain)
-    }
-
-    var remainingDaysLabel: some View {
-        Label(
-            remainingDaysText,
-            systemImage: "target"
-        )
-        .font(AppTypography.headline)
-        .fixedSize(horizontal: true, vertical: false)
-    }
-
-    var remainingDaysText: String {
-        if summary.reviewRequiredDays > 0 {
-            return remainingOfficeDays == 1
-                ? "1 office day currently needed"
-                : "\(remainingOfficeDays) office days currently needed"
-        }
-
-        return remainingOfficeDays == 1
-            ? "1 office day left"
-            : "\(remainingOfficeDays) office days left"
-    }
-
-    var planStatus: some View {
-        DSStatusPill(
-            text: planStatusText,
-            systemImage: additionalPlansNeeded == 0 ? "checkmark" : "calendar.badge.clock",
-            style: additionalPlansNeeded == 0 ? .success : .info
-        )
-    }
-
-    var planStatusText: String {
-        if additionalPlansNeeded == 0 {
-            return "Plan ready"
-        }
-        if plannedCandidateDays == 0 {
-            return "None planned"
-        }
-        return "\(plannedCandidateDays) planned"
-    }
-
-    var unreachableTargetMessage: String {
-        let availableDays = candidateDates.count
-        let availableLabel = availableDays == 1
-            ? "1 eligible workday remains"
-            : "\(availableDays) eligible workdays remain"
-        let targetLabel = summary.requiredOfficeDays == 1
-            ? "the 1-day target"
-            : "the \(summary.requiredOfficeDays)-day target"
-        return "\(availableLabel), so \(targetLabel) is not reachable."
-    }
-
-    var reviewRequiredMessage: String {
-        let count = summary.reviewRequiredDays
-        let dayLabel = count == 1 ? "1 day still needs" : "\(count) days still need"
-        return "Based on confirmed attendance. \(dayLabel) review, so this plan may change."
-    }
-}
-
-private struct OfficePlanMetric: View {
-    let title: String
-    let value: Int
-    let accessibilityIdentifier: String
-
-    var body: some View {
-        VStack(spacing: AppSpacing.xxs) {
-            Text(value, format: .number)
-                .font(AppTypography.smallMetric.monospacedDigit())
-                .foregroundStyle(Color.ds.textPrimary)
-
-            Text(title)
-                .font(AppTypography.caption)
-                .foregroundStyle(Color.ds.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(value.formatted())
-        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 

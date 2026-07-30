@@ -16,6 +16,7 @@ struct DashboardView: View {
     private let periodEvaluator = CompliancePeriodEvaluator()
     private let ruleResolver = ComplianceRuleResolver()
     private let trendCalculator = ComplianceTrendCalculator()
+    private let planConfidenceCalculator = OfficePlanConfidenceCalculator()
 
     init(
         onOpenCalendar: (() -> Void)? = nil,
@@ -250,6 +251,26 @@ private extension DashboardView {
         return .reachable
     }
 
+    private var planConfidence: OfficePlanConfidence {
+        planConfidenceCalculator.evaluate(
+            OfficePlanConfidenceCalculator.Input(
+                requiredOfficeDays: summary.requiredOfficeDays,
+                completedOfficeDates: completedOfficeDates,
+                plannedOfficeDates: remainingPlannedOfficeDates,
+                possibleRemainingOfficeDates: possibleRemainingOfficeDates,
+                reviewRequiredDays: reviewDates.count,
+                evaluationDate: today,
+                calendar: calendar
+            )
+        )
+    }
+
+    private var showsPlanConfidence: Bool {
+        hasConfiguredTarget
+            && summary.adjustedEligibleDays > 0
+            && reviewDates.isEmpty
+    }
+
     private var recentMonthlyTrend: [ComplianceTrendPoint] {
         guard hasConfiguredTarget else {
             return []
@@ -277,25 +298,42 @@ extension DashboardView {
                     if complianceRules.isEmpty {
                         DashboardSetupCard(onOpenSettings: onOpenSettings)
                     } else {
-                        VStack(alignment: .leading, spacing: AppSpacing.cardGap) {
-                            ComplianceHeroCard(
-                                monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
-                                completedOfficeDays: summary.completedOfficeDays,
-                                businessDaysToDate: summary.eligibleDaysToDate,
-                                remainingOfficeDays: summary.officeDaysNeeded,
-                                requiredOfficeDays: summary.requiredOfficeDays,
-                                reviewCount: reviewDates.count,
-                                currentCompliance: summary.officeShareToDate,
-                                status: dashboardStatus,
-                                targetIsConfigured: hasConfiguredTarget
-                            )
-
-                            if !reviewDates.isEmpty {
-                                DashboardReviewAction(
-                                    reviewCount: reviewDates.count
+                        if showsPlanConfidence {
+                            Text(
+                                referenceDate.formatted(
+                                    .dateTime.weekday(.wide).day().month(.wide).year()
                                 )
-                            } else if !hasPeriodData {
-                                DashboardStartAction(onOpenCalendar: onOpenCalendar)
+                            )
+                            .font(AppTypography.callout)
+                            .foregroundStyle(Color.ds.textSecondary)
+                            .accessibilityIdentifier("dashboard.referenceDate")
+
+                            DashboardPlanConfidenceCard(
+                                confidence: planConfidence,
+                                displayedMonth: currentMonthStart,
+                                referenceDate: referenceDate
+                            )
+                        } else {
+                            VStack(alignment: .leading, spacing: AppSpacing.cardGap) {
+                                ComplianceHeroCard(
+                                    monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
+                                    completedOfficeDays: summary.completedOfficeDays,
+                                    businessDaysToDate: summary.eligibleDaysToDate,
+                                    remainingOfficeDays: summary.officeDaysNeeded,
+                                    requiredOfficeDays: summary.requiredOfficeDays,
+                                    reviewCount: reviewDates.count,
+                                    currentCompliance: summary.officeShareToDate,
+                                    status: dashboardStatus,
+                                    targetIsConfigured: hasConfiguredTarget
+                                )
+
+                                if !reviewDates.isEmpty {
+                                    DashboardReviewAction(
+                                        reviewCount: reviewDates.count
+                                    )
+                                } else if !hasPeriodData {
+                                    DashboardStartAction(onOpenCalendar: onOpenCalendar)
+                                }
                             }
                         }
 
@@ -303,11 +341,13 @@ extension DashboardView {
                             DashboardTrendPreview(points: recentMonthlyTrend)
                         }
 
-                        UpcomingOfficePlanSection(
-                            plannedDates: remainingPlannedOfficeDates,
-                            displayedMonth: currentMonthStart,
-                            referenceDate: referenceDate
-                        )
+                        if !showsPlanConfidence {
+                            UpcomingOfficePlanSection(
+                                plannedDates: remainingPlannedOfficeDates,
+                                displayedMonth: currentMonthStart,
+                                referenceDate: referenceDate
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)

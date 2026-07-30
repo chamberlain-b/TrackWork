@@ -3,8 +3,11 @@ import SwiftData
 
 enum AppLaunchConfiguration {
     enum UITestFixture: String {
+        case adaptivePlan
         case fresh
+        case planCovered
         case populated
+        case summaryReview
     }
 
     static var isUITesting: Bool {
@@ -17,6 +20,32 @@ enum AppLaunchConfiguration {
         }
 
         return UITestFixture(rawValue: value) ?? .fresh
+    }
+
+    static var dashboardReferenceDate: Date {
+        guard isUITesting else {
+            return .now
+        }
+
+        switch uiTestFixture {
+        case .adaptivePlan, .planCovered, .summaryReview:
+            return fixedUITestReferenceDate
+        case .fresh, .populated:
+            return .now
+        }
+    }
+
+    private static var fixedUITestReferenceDate: Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = 2026
+        components.month = 7
+        components.day = 29
+        components.hour = 12
+        return calendar.date(from: components) ?? .now
     }
 }
 
@@ -58,24 +87,75 @@ enum AppModelContainer {
         _ fixture: AppLaunchConfiguration.UITestFixture,
         in modelContext: ModelContext
     ) throws {
+        let fixedRequiredDays = [.adaptivePlan, .planCovered].contains(fixture) ? 8 : 10
         let rule = ComplianceRule(
             name: "UI Test Rule",
             country: .australia,
             jurisdictionId: "AU-VIC",
             requirementType: .fixedMonthlyDays,
-            fixedRequiredDays: 10,
+            fixedRequiredDays: fixedRequiredDays,
             prorateFixedTargetForLeave: true,
             minimumOfficeMinutes: 180,
-            selectedISOWeekdays: [1, 2, 3, 4, 5]
+            selectedISOWeekdays: [1, 2, 3, 4, 5],
+            preferredOfficeISOWeekdays: fixture == .adaptivePlan ? [3] : []
         )
         modelContext.insert(rule)
 
-        guard fixture == .populated else {
+        switch fixture {
+        case .adaptivePlan:
+            insertPlanCoveredFixture(in: modelContext)
+            insertAdaptivePlanFixture(in: modelContext)
             try modelContext.save()
-            return
+        case .fresh:
+            try modelContext.save()
+        case .planCovered:
+            insertPlanCoveredFixture(in: modelContext)
+            try modelContext.save()
+        case .populated:
+            let date = uiTestDate()
+            insertManuallyCorrectedOfficeDay(on: date, in: modelContext)
+            insertPopulatedLocationFixture(on: date, in: modelContext)
+            try modelContext.save()
+        case .summaryReview:
+            insertSummaryReviewFixture(in: modelContext)
+            try modelContext.save()
         }
+    }
 
-        let date = uiTestDate()
+    private static func insertAdaptivePlanFixture(in modelContext: ModelContext) {
+        [
+            uiTestDate(year: 2026, month: 8, day: 3),
+            uiTestDate(year: 2026, month: 8, day: 13),
+            uiTestDate(year: 2026, month: 8, day: 19),
+            uiTestDate(year: 2026, month: 8, day: 21),
+            uiTestDate(year: 2026, month: 8, day: 24),
+            uiTestDate(year: 2026, month: 8, day: 31)
+        ]
+        .forEach { modelContext.insert(PlannedOfficeDay(date: $0)) }
+
+        modelContext.insert(
+            LeaveRecord(
+                date: uiTestDate(year: 2026, month: 8, day: 11),
+                leaveType: .annualLeave,
+                note: "UI test planned leave"
+            )
+        )
+        modelContext.insert(
+            PublicHoliday(
+                date: uiTestDate(year: 2026, month: 8, day: 28),
+                name: "UI Test Public Holiday",
+                country: .australia,
+                jurisdictionId: "AU-VIC",
+                isRegional: true,
+                sourceName: "UI Test Fixture"
+            )
+        )
+    }
+
+    private static func insertManuallyCorrectedOfficeDay(
+        on date: Date,
+        in modelContext: ModelContext
+    ) {
         let attendanceDay = AttendanceDay(
             date: date,
             detectedClassification: .home,
@@ -95,8 +175,91 @@ enum AppModelContainer {
                 note: "UI test manual correction"
             )
         )
-        insertPopulatedLocationFixture(on: date, in: modelContext)
-        try modelContext.save()
+    }
+
+    private static func insertSummaryReviewFixture(in modelContext: ModelContext) {
+        let calendar = Calendar.autoupdatingCurrent
+        let referenceDate = AppLaunchConfiguration.dashboardReferenceDate
+        guard let attendanceDate = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: referenceDate
+        ) else {
+            return
+        }
+
+        insertManuallyCorrectedOfficeDay(on: attendanceDate, in: modelContext)
+        if let plannedDate = uiTestPlannedOfficeDate(referenceDate: referenceDate) {
+            modelContext.insert(PlannedOfficeDay(date: plannedDate))
+        }
+    }
+
+    private static func insertPlanCoveredFixture(in modelContext: ModelContext) {
+        let pastWorkdays = uiTestPastWorkdays()
+        let plannedDate = uiTestPlannedOfficeDate(
+            referenceDate: AppLaunchConfiguration.dashboardReferenceDate
+        )
+        let target = 8
+        let completedCount = plannedDate == nil ? target : max(0, target - 1)
+        let completedDates = Set(pastWorkdays.suffix(completedCount))
+
+        for date in pastWorkdays {
+            let isOfficeDay = completedDates.contains(date)
+            modelContext.insert(
+                AttendanceDay(
+                    date: date,
+                    detectedClassification: isOfficeDay ? .office : .home,
+                    finalClassification: isOfficeDay ? .office : .home,
+                    complianceTreatment: isOfficeDay ? .countsAsOffice : .countsAsHome,
+                    officeMinutes: isOfficeDay ? 420 : 0,
+                    homeMinutes: isOfficeDay ? 0 : 420
+                )
+            )
+        }
+
+        if let plannedDate {
+            modelContext.insert(PlannedOfficeDay(date: plannedDate))
+        }
+    }
+
+    private static func uiTestPastWorkdays() -> [Date] {
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: AppLaunchConfiguration.dashboardReferenceDate)
+        guard let monthStart = calendar.dateInterval(of: .month, for: today)?.start else {
+            return []
+        }
+
+        var dates: [Date] = []
+        var candidate = calendar.startOfDay(for: monthStart)
+        while candidate < today {
+            if !calendar.isDateInWeekend(candidate) {
+                dates.append(candidate)
+            }
+            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: candidate) else {
+                break
+            }
+            candidate = nextDate
+        }
+        return dates
+    }
+
+    private static func uiTestPlannedOfficeDate(referenceDate: Date = .now) -> Date? {
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: referenceDate)
+        let month = calendar.component(.month, from: today)
+        let year = calendar.component(.year, from: today)
+        var candidate = calendar.date(byAdding: .day, value: 1, to: today)
+
+        while let date = candidate,
+              calendar.component(.month, from: date) == month,
+              calendar.component(.year, from: date) == year {
+            if !calendar.isDateInWeekend(date) {
+                return date
+            }
+            candidate = calendar.date(byAdding: .day, value: 1, to: date)
+        }
+
+        return nil
     }
 
     private static func insertPopulatedLocationFixture(on date: Date, in modelContext: ModelContext) {
@@ -145,22 +308,16 @@ enum AppModelContainer {
         return date
     }
 
-    private static func uiTestPlannedOfficeDate() -> Date? {
+    private static func uiTestDate(year: Int, month: Int, day: Int) -> Date {
         let calendar = Calendar.autoupdatingCurrent
-        let today = calendar.startOfDay(for: .now)
-        let month = calendar.component(.month, from: today)
-        let year = calendar.component(.year, from: today)
-        var candidate = calendar.date(byAdding: .day, value: 1, to: today)
-
-        while let date = candidate,
-              calendar.component(.month, from: date) == month,
-              calendar.component(.year, from: date) == year {
-            if (2...6).contains(calendar.component(.weekday, from: date)) {
-                return date
-            }
-            candidate = calendar.date(byAdding: .day, value: 1, to: date)
-        }
-
-        return nil
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = 12
+        return calendar.date(from: components) ?? .now
     }
+
 }

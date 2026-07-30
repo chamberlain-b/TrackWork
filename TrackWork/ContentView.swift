@@ -11,12 +11,13 @@ struct ContentView: View {
             Tab("Summary", systemImage: "house.fill", value: AppTab.summary) {
                 DashboardView(
                     onOpenCalendar: { selectedTab = .calendar },
-                    onOpenSettings: { selectedTab = .settings }
+                    onOpenSettings: { selectedTab = .settings },
+                    referenceDate: AppLaunchConfiguration.dashboardReferenceDate
                 )
             }
 
             Tab("Calendar", systemImage: "calendar", value: AppTab.calendar) {
-                MonthCalendarView()
+                MonthCalendarView(referenceDate: AppLaunchConfiguration.dashboardReferenceDate)
             }
 
             Tab("History", systemImage: "list.bullet.rectangle", value: AppTab.history) {

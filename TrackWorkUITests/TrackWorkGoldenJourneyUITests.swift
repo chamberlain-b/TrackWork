@@ -58,8 +58,8 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         attachScreenshot(named: "Address Search")
     }
 
-    func testPopulatedSummaryPresentsPrimaryHierarchyAndDetails() {
-        launch(fixture: "populated")
+    func testSummaryReviewPresentsPrimaryHierarchyAndDetails() {
+        launch(fixture: "summaryReview")
 
         XCTAssertTrue(element(identifier: "dashboard.hero").waitForExistence(timeout: 8))
         attachScreenshot(named: "Summary Top")
@@ -85,7 +85,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         XCTAssertTrue(officePlan.isHittable)
         attachScreenshot(named: "Summary Office Plan")
         officePlan.tap()
-        XCTAssertTrue(app.navigationBars["Plan Office Days"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
         attachScreenshot(named: "Office Plan From Summary")
     }
 

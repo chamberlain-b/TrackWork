@@ -173,6 +173,7 @@ struct MonthCalendarView: View {
             .toolbar {
                 CalendarPrimaryToolbar(
                     displayedMonth: monthStart,
+                    referenceDate: referenceDate,
                     isShowingBatchLeave: $isShowingBatchLeave,
                     isShowingLegend: $isShowingLegend
                 )

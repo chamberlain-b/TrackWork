@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CalendarPrimaryToolbar: ToolbarContent {
     let displayedMonth: Date
+    let referenceDate: Date
     @Binding var isShowingBatchLeave: Bool
     @Binding var isShowingLegend: Bool
 
@@ -16,7 +17,10 @@ struct CalendarPrimaryToolbar: ToolbarContent {
 
             Menu {
                 NavigationLink {
-                    OfficePlanView(displayedMonth: displayedMonth)
+                    OfficePlanView(
+                        displayedMonth: displayedMonth,
+                        referenceDate: referenceDate
+                    )
                 } label: {
                     Label("Plan Office Days", systemImage: "calendar.badge.clock")
                 }
