@@ -69,9 +69,16 @@ final class TrackWorkFunctionalityPolishUITests: XCTestCase {
         attachScreenshot(named: "Review Queue Batch Confirmation")
         confirm.tap()
 
-        XCTAssertTrue(waitUntil(timeout: 5) {
-            self.leadingInteger(in: remaining.label) == initialCount - selectedCount
-        })
+        let expectedRemaining = initialCount - selectedCount
+        if expectedRemaining == 0 {
+            XCTAssertTrue(app.staticTexts["All caught up"].waitForExistence(timeout: 5))
+        } else {
+            XCTAssertTrue(waitUntil(timeout: 5) {
+                let updatedRemaining = self.element(identifier: "reviewQueue.remaining")
+                guard updatedRemaining.exists else { return false }
+                return self.leadingInteger(in: updatedRemaining.label) == expectedRemaining
+            })
+        }
         XCTAssertTrue(element(identifier: "reviewQueue.undo").exists)
     }
 
@@ -89,7 +96,9 @@ final class TrackWorkFunctionalityPolishUITests: XCTestCase {
     func testSettingsClarifiesSetupPreferredDaysAndLocationHierarchy() {
         app.workTrackTab(named: "Settings").tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
-        XCTAssertTrue(element(identifier: "settings.setupSummary").waitForExistence(timeout: 3))
+        XCTAssertTrue(element(identifier: "settings.automaticAttendance").waitForExistence(timeout: 3))
+        reveal(identifier: "settings.editPolicy").tap()
+        XCTAssertTrue(element(identifier: "settings.requirementType").exists)
         XCTAssertTrue(app.staticTexts["Days per month"].exists)
         XCTAssertFalse(app.staticTexts["Days per period"].exists)
         XCTAssertFalse(app.staticTexts["Location Events"].exists)
@@ -99,10 +108,12 @@ final class TrackWorkFunctionalityPolishUITests: XCTestCase {
         XCTAssertTrue(app.switches["Tuesday"].exists)
         XCTAssertTrue(app.switches["Thursday"].exists)
         app.switches["Tuesday"].tap()
-        app.navigationBars.buttons["Settings"].tap()
+        app.navigationBars.buttons["Work Policy"].tap()
 
         let preferredDays = reveal(identifier: "settings.preferredOfficeDays")
         XCTAssertTrue(preferredDays.label.contains("Preferred office days"))
+        element(identifier: "settings.savePolicy").tap()
+        XCTAssertTrue(element(identifier: "settings.editPolicy").waitForExistence(timeout: 5))
 
         reveal(identifier: "settings.automaticAttendance").tap()
         XCTAssertTrue(app.navigationBars["Automatic Attendance"].waitForExistence(timeout: 5))

@@ -6,11 +6,11 @@ struct LegendPill: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: AppSpacing.xs) {
+        HStack(spacing: AppSpacing.xxs) {
             Image(systemName: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(color)
-                .frame(width: 24, height: 24)
+                .frame(width: 18, height: 18)
                 .background(color.opacity(0.12), in: Circle())
                 .accessibilityHidden(true)
 
@@ -18,13 +18,7 @@ struct LegendPill: View {
                 .font(AppTypography.caption)
                 .foregroundStyle(Color.ds.textSecondary)
         }
-        .padding(.horizontal, AppSpacing.sm)
-        .padding(.vertical, AppSpacing.xs)
-        .background(Color.ds.surfacePrimary.opacity(0.72), in: Capsule(style: .continuous))
-        .overlay {
-            Capsule(style: .continuous)
-                .stroke(Color.ds.borderSubtle.opacity(0.64), lineWidth: 1)
-        }
+
     }
 }
 
@@ -49,6 +43,7 @@ struct DayCell: View {
     let calendar: Calendar
     let referenceDate: Date
     let isPrimaryReview: Bool
+    var isSelected = false
 
     private var dayNumber: Int {
         calendar.component(.day, from: date)
@@ -78,65 +73,34 @@ struct DayCell: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+        VStack(spacing: 2) {
             Text(dayNumber, format: .number)
-                .font(AppTypography.captionStrong.monospacedDigit())
-                .foregroundStyle(isToday ? Color.white : dayNumberColor)
-                .frame(width: 26, height: 26)
+                .font(AppTypography.callout.monospacedDigit())
+                .foregroundStyle(isSelected ? Color.ds.backgroundPrimary : Color.ds.textPrimary)
+                .frame(width: 32, height: 32)
                 .background {
-                    if isToday {
-                        Circle().fill(Color.ds.accentPrimary)
-                    }
+                    if isSelected { Circle().fill(Color.ds.interactionPrimary) }
+                    else if isToday { Circle().strokeBorder(Color.ds.interactionPrimary, lineWidth: 1.5) }
+                    else if !presentation.isQuiet { Circle().fill(presentation.color.opacity(0.10)) }
                 }
-
-            Spacer(minLength: 0)
-
             if let systemImage = presentation.systemImage {
-                statusMarker(systemImage: systemImage)
-            }
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(presentation.color)
+                    .frame(height: 14)
+                    .accessibilityHidden(true)
+            } else { Color.clear.frame(height: 14) }
         }
-        .padding(6)
-        .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
-        .background(
-            presentation.cellBackground,
-            in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
-        )
+        .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDate)
         .accessibilityValue(presentation.label)
-        .accessibilityHint("Opens attendance details")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(isSelected ? "Selected. Details are shown below." : "Shows day details")
         .accessibilityIdentifier(calendar.calendarDayAccessibilityIdentifier(for: date))
     }
 
-    private var dayNumberColor: Color {
-        presentation.isQuiet ? Color.ds.textTertiary : Color.ds.textPrimary
-    }
-
-    @ViewBuilder
-    private func statusMarker(systemImage: String) -> some View {
-        if presentation.kind == .review, !isPrimaryReview {
-            Circle()
-                .fill(presentation.color)
-                .frame(width: 7, height: 7)
-                .frame(width: 28, height: 20)
-        } else {
-            Image(
-                systemName: presentation.kind == .review
-                    ? "exclamationmark.triangle.fill"
-                    : systemImage
-            )
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(presentation.color)
-            .frame(width: 28, height: 20)
-            .background(
-                presentation.kind == .review
-                    ? Color.clear
-                    : presentation.color.opacity(0.11),
-                in: Capsule(style: .continuous)
-            )
-        }
-    }
 }
 
 struct CalendarAgendaRow: View {
@@ -151,6 +115,7 @@ struct CalendarAgendaRow: View {
     let selectedISOWeekdays: Set<Int>
     let calendar: Calendar
     let referenceDate: Date
+    var isSelected = false
 
     private var presentation: CalendarDayPresentation {
         CalendarDayPresentation(
@@ -219,15 +184,13 @@ struct CalendarAgendaRow: View {
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)
         .frame(maxWidth: .infinity, minHeight: 58)
-        .background(
-            presentation.cellBackground,
-            in: RoundedRectangle(cornerRadius: AppRadius.sm, style: .continuous)
-        )
+        .background(isSelected ? Color.ds.accentSoft : Color.clear)
+        .overlay(alignment: .bottom) { Divider() }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()))
         .accessibilityValue(presentation.label)
-        .accessibilityHint("Opens attendance details")
+        .accessibilityHint(isSelected ? "Selected. Details are shown above." : "Shows day details")
         .accessibilityIdentifier(calendar.calendarDayAccessibilityIdentifier(for: date))
     }
 

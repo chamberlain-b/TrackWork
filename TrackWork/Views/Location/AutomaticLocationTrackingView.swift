@@ -10,7 +10,11 @@ struct AutomaticLocationTrackingView: View {
     @State private var actionMessage: String?
 
     private var activePlaces: [Place] {
-        places.filter(\.isActive)
+        places.filter { $0.isActive && $0.type != nil }
+    }
+
+    private var locationAccess: AutomaticAttendanceAccessPresentation {
+        AutomaticAttendanceAccessPresentation(status: trackingService.authorizationStatus)
     }
 
     var body: some View {
@@ -18,11 +22,22 @@ struct AutomaticLocationTrackingView: View {
             Section {
                 Label(statusTitle, systemImage: statusSystemImage)
                     .foregroundStyle(statusColor)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(statusTitle)
                     .accessibilityIdentifier("automaticTracking.status")
 
                 Text(statusDetail)
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.textSecondary)
+
+                LabeledContent("Location access", value: locationAccess.title)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("automaticTracking.locationAccess")
+
+                Text(locationAccess.detail)
+                    .font(AppTypography.caption)
+                    .foregroundStyle(Color.ds.textSecondary)
+                    .accessibilityIdentifier("automaticTracking.locationAccessDetail")
 
                 if trackingService.isAutomaticTrackingEnabled {
                     Button("Turn Off", systemImage: "location.slash", role: .destructive) {
@@ -30,7 +45,11 @@ struct AutomaticLocationTrackingView: View {
                         actionMessage = "Automatic Attendance is off."
                     }
                     .accessibilityIdentifier("automaticTracking.disable")
-                } else if !activePlaces.isEmpty {
+                }
+
+                if !activePlaces.isEmpty,
+                   (!trackingService.isAutomaticTrackingEnabled
+                    || trackingService.authorizationStatus != .authorizedAlways) {
                     setupAction
                 }
 
@@ -51,10 +70,13 @@ struct AutomaticLocationTrackingView: View {
                         LocationSetupView()
                     } label: {
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                            Label("Add a home or office", systemImage: "mappin.and.ellipse")
+                            Label(
+                                places.isEmpty ? "Add a home or office" : "Review saved locations",
+                                systemImage: "mappin.and.ellipse"
+                            )
                                 .font(AppTypography.headline)
 
-                            Text("Define where attendance can be detected.")
+                            Text("Choose an address or map point. Saving a place does not turn on Automatic Attendance.")
                                 .font(AppTypography.caption)
                                 .foregroundStyle(Color.ds.textSecondary)
                         }
@@ -102,6 +124,8 @@ struct AutomaticLocationTrackingView: View {
                 Text("Location events stay on this device and are excluded from standard reports.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Automatic Attendance")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -142,12 +166,16 @@ struct AutomaticLocationTrackingView: View {
             .disabled(activePlaces.isEmpty)
             .accessibilityIdentifier("automaticTracking.enable")
 
-        case .denied, .restricted:
+        case .denied:
             if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                 Link(destination: settingsURL) {
                     Label("Open iOS Location Settings", systemImage: "gear")
                 }
+                .accessibilityIdentifier("automaticTracking.openSettings")
             }
+
+        case .restricted:
+            EmptyView()
 
         @unknown default:
             Text("Location permission is unavailable. Manual attendance still works.")
@@ -170,7 +198,7 @@ struct AutomaticLocationTrackingView: View {
         }
 
         if activePlaces.isEmpty {
-            return "Not set up"
+            return places.isEmpty ? "No saved locations" : "No active saved locations"
         }
 
         return "Automatic attendance is off"
@@ -182,27 +210,16 @@ struct AutomaticLocationTrackingView: View {
         }
 
         if activePlaces.isEmpty {
-            return "No places or location access configured."
+            return places.isEmpty
+                ? "Add a home or office area before turning on Automatic Attendance."
+                : "Review and save a home or office area to make it active."
         }
 
-        switch trackingService.authorizationStatus {
-        case .notDetermined:
-            return "Your places are ready. Allow location access to continue."
-        case .authorizedWhenInUse:
-            return "Allow Always access so iOS can detect arrivals in the background."
-        case .authorizedAlways:
-            return "Location access is ready. Turn on automatic attendance when you’re ready."
-        case .denied, .restricted:
-            return "Location access is off. Manual attendance still works."
-        @unknown default:
-            return "Location permission is unavailable. Manual attendance still works."
-        }
+        return "Your saved areas are ready. Automatic Attendance is optional."
     }
 
     private var statusFooter: String {
-        activePlaces.isEmpty
-            ? "Nothing is tracked until you finish setup."
-            : "Background attendance requires Always location access."
+        "You can record and correct attendance in Home or Calendar without location access."
     }
 
     private var statusSystemImage: String {
@@ -229,6 +246,38 @@ struct AutomaticLocationTrackingView: View {
         }
 
         return trackingService.isAutomaticTrackingEnabled ? Color.ds.warning : Color.ds.textSecondary
+    }
+}
+
+struct AutomaticAttendanceAccessPresentation {
+    let status: CLAuthorizationStatus
+
+    var title: String {
+        switch status {
+        case .notDetermined: "Not requested"
+        case .authorizedWhenInUse: "While Using App"
+        case .authorizedAlways: "Always"
+        case .denied: "Denied"
+        case .restricted: "Restricted"
+        @unknown default: "Unavailable"
+        }
+    }
+
+    var detail: String {
+        switch status {
+        case .notDetermined:
+            "Location permission is only requested when you choose to allow it."
+        case .authorizedWhenInUse:
+            "Always access is needed for iOS to detect saved-area arrivals when TrackWork is closed."
+        case .authorizedAlways:
+            "Always access is allowed. Saved areas are monitored only while Automatic Attendance is on."
+        case .denied:
+            "Location access is denied. You can change it in iOS Settings or keep recording days manually."
+        case .restricted:
+            "iOS restricts location access on this device. Automatic Attendance is unavailable; manual attendance still works."
+        @unknown default:
+            "Location permission is unavailable. Manual attendance still works."
+        }
     }
 }
 

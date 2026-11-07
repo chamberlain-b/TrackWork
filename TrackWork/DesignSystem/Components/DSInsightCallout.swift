@@ -28,6 +28,6 @@ struct DSInsightCallout: View {
         }
         .padding(AppSpacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassSurface(cornerRadius: AppRadius.lg, tint: Color.ds.info)
+        .background(Color.ds.surfaceSecondary, in: RoundedRectangle(cornerRadius: AppRadius.lg))
     }
 }

@@ -17,6 +17,7 @@ final class LocationTrackingService: NSObject {
     nonisolated static let automationPreferenceKey = "location.automaticAttendance.isEnabled"
 
     private let locationManager: CLLocationManager
+    private let calendar: Calendar
     private let defaults: UserDefaults
     private let automationPreferenceKey: String
     private var modelContext: ModelContext?
@@ -24,6 +25,8 @@ final class LocationTrackingService: NSObject {
     private var lastConfiguredPlaces: [Place] = []
     private var hasConfiguredPlaces = false
     private var pendingRegionEvents: [PendingRegionEvent] = []
+    private var isForegroundActive = false
+    private var foregroundConfirmationTask: Task<Void, Never>?
 
     private(set) var isAutomaticTrackingEnabled: Bool
     private(set) var authorizationStatus: CLAuthorizationStatus
@@ -32,12 +35,14 @@ final class LocationTrackingService: NSObject {
     init(
         locationManager: CLLocationManager = CLLocationManager(),
         defaults: UserDefaults = .standard,
+        calendar: Calendar = .autoupdatingCurrent,
         automationPreferenceKey: String = LocationTrackingService.automationPreferenceKey,
         automaticBackgroundTrackingEnabled: Bool? = nil,
         isUITesting: Bool? = nil
     ) {
         self.locationManager = locationManager
         self.defaults = defaults
+        self.calendar = calendar
         self.automationPreferenceKey = automationPreferenceKey
         self.authorizationStatus = locationManager.authorizationStatus
 
@@ -210,6 +215,15 @@ final class LocationTrackingService: NSObject {
         }
     }
 
+    func setForegroundActive(_ active: Bool) {
+        isForegroundActive = active
+        foregroundConfirmationTask?.cancel()
+        foregroundConfirmationTask = nil
+        guard active else { return }
+        refreshAuthorizationStatus()
+        reseedCurrentRegionStates()
+    }
+
     func reseedCurrentRegionStates() {
         guard isAutomaticTrackingEnabled, authorizationStatus == .authorizedAlways else {
             return
@@ -356,7 +370,7 @@ final class LocationTrackingService: NSObject {
             persistEvent(
                 PendingRegionEvent(
                     regionIdentifier: entry.regionIdentifier,
-                    kind: .exited,
+                    kind: .monitoringStopped,
                     occurredAt: occurredAt
                 )
             )
@@ -386,8 +400,21 @@ final class LocationTrackingService: NSObject {
         persistEvent(pendingEvent)
     }
 
-    private func persistEvent(for region: CLRegion, kind: LocationEventKind) {
-        recordBoundaryEvent(regionIdentifier: region.identifier, kind: kind)
+    func recordRegionState(
+        _ state: CLRegionState,
+        regionIdentifier: String,
+        occurredAt: Date = .now
+    ) {
+        switch state {
+        case .inside:
+            recordBoundaryEvent(regionIdentifier: regionIdentifier, kind: .confirmedInside, occurredAt: occurredAt)
+        case .outside:
+            recordBoundaryEvent(regionIdentifier: regionIdentifier, kind: .confirmedOutside, occurredAt: occurredAt)
+        case .unknown:
+            break // Unknown state is not evidence of attendance or departure.
+        @unknown default:
+            break
+        }
     }
 
     private func persistEvent(_ pendingEvent: PendingRegionEvent) {
@@ -407,10 +434,12 @@ final class LocationTrackingService: NSObject {
 
         do {
             let existingEvents = try modelContext.fetch(FetchDescriptor<LocationEvent>())
+            let isBoundary = pendingEvent.kind == .entered || pendingEvent.kind == .exited
+            let deduplicationInterval: TimeInterval = isBoundary ? 60 : 0.001
             let isDuplicate = existingEvents.contains { event in
                 event.regionIdentifier == pendingEvent.regionIdentifier
                     && event.eventKind == pendingEvent.kind
-                    && abs(event.occurredAt.timeIntervalSince(pendingEvent.occurredAt)) < 60
+                    && abs(event.occurredAt.timeIntervalSince(pendingEvent.occurredAt)) < deduplicationInterval
             }
             guard !isDuplicate else {
                 return
@@ -433,15 +462,72 @@ final class LocationTrackingService: NSObject {
         modelContext.insert(event)
 
         do {
-            try AutomatedAttendanceEventProcessor().recalculateAttendance(
+            try AutomatedAttendanceEventProcessor(calendar: calendar).recalculateAttendance(
                 affectedBy: event,
                 in: modelContext
             )
             try modelContext.save()
+            scheduleForegroundConfirmation()
         } catch {
             modelContext.rollback()
             trackingStatus = .failed("Location event could not be saved.")
         }
+    }
+
+    private func scheduleForegroundConfirmation() {
+        foregroundConfirmationTask?.cancel()
+        foregroundConfirmationTask = nil
+        guard isForegroundActive, isAutomaticTrackingEnabled,
+              let modelContext,
+              let events = try? modelContext.fetch(FetchDescriptor<LocationEvent>()),
+              let rules = try? modelContext.fetch(FetchDescriptor<ComplianceRule>()),
+              let attendanceDays = try? modelContext.fetch(FetchDescriptor<AttendanceDay>()) else { return }
+
+        let now = Date.now
+        guard let nextConfirmation = Self.nextForegroundConfirmation(
+            after: now, events: events, attendanceDays: attendanceDays, rules: rules, calendar: calendar
+        ) else { return }
+        let delay = max(1, nextConfirmation.timeIntervalSince(now))
+        foregroundConfirmationTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self, self.isForegroundActive else { return }
+            // The timer requests evidence; it never awards time by itself.
+            self.reseedCurrentRegionStates()
+        }
+    }
+
+    static func nextForegroundConfirmation(
+        after now: Date,
+        events: [LocationEvent],
+        attendanceDays: [AttendanceDay],
+        rules: [ComplianceRule],
+        calendar: Calendar = .current
+    ) -> Date? {
+        let openEntries = LocationVisitResolver().openEntries(from: events)
+        guard !openEntries.isEmpty else { return nil }
+        let today = calendar.startOfDay(for: now)
+        let recordedDay = attendanceDays.first { calendar.startOfDay(for: $0.date) == today }
+        let officeThreshold = ComplianceRuleResolver().rule(for: today, from: rules)?.minimumOfficeMinutes ?? 180
+        var candidates: [Date] = []
+        for entry in openEntries {
+            guard now.timeIntervalSince(entry.occurredAt) <= LocationVisitResolver.maximumVisitDuration else {
+                continue
+            }
+            let remainingMinutes: Int
+            switch entry.placeType {
+            case .office: remainingMinutes = officeThreshold - (recordedDay?.officeMinutes ?? 0)
+            case .home: remainingMinutes = 1 - (recordedDay?.homeMinutes ?? 0)
+            case nil: continue
+            }
+            if remainingMinutes > 0 {
+                candidates.append(now.addingTimeInterval(TimeInterval(remainingMinutes * 60)))
+            }
+        }
+        // A visible app also gets a fresh observation when the local date changes.
+        if let nextDay = calendar.date(byAdding: .day, value: 1, to: today) {
+            candidates.append(nextDay)
+        }
+        return candidates.min()
     }
 
     private func flushPendingRegionEvents() {
@@ -488,14 +574,16 @@ extension LocationTrackingService: CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        let occurredAt = Date.now
         Task { @MainActor in
-            persistEvent(for: region, kind: .entered)
+            recordBoundaryEvent(regionIdentifier: region.identifier, kind: .entered, occurredAt: occurredAt)
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        let occurredAt = Date.now
         Task { @MainActor in
-            persistEvent(for: region, kind: .exited)
+            recordBoundaryEvent(regionIdentifier: region.identifier, kind: .exited, occurredAt: occurredAt)
         }
     }
 
@@ -504,12 +592,9 @@ extension LocationTrackingService: CLLocationManagerDelegate {
         didDetermineState state: CLRegionState,
         for region: CLRegion
     ) {
-        guard state == .inside else {
-            return
-        }
-
+        let occurredAt = Date.now
         Task { @MainActor in
-            persistEvent(for: region, kind: .entered)
+            recordRegionState(state, regionIdentifier: region.identifier, occurredAt: occurredAt)
         }
     }
 

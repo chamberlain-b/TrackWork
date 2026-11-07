@@ -10,24 +10,35 @@ struct RecordsView: View {
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
     @State private var selectedFilter: CompliancePeriodPreset = .currentMonth
-    @State private var customRangeStart: Date = .now
-    @State private var customRangeEnd: Date = .now
+    @State private var customRangeStart: Date
+    @State private var customRangeEnd: Date
     @State private var recordFilter: RecordFilter = .all
     @State private var searchText = ""
 
     private let onOpenCalendar: (() -> Void)?
+    private let referenceDate: Date
+    private let usesNavigationStack: Bool
+    @Environment(\.dismiss) private var dismiss
 
     private let calendar = Calendar.recordsCalendar
     private let ruleResolver = ComplianceRuleResolver()
 
-    init(onOpenCalendar: (() -> Void)? = nil) {
+    init(
+        onOpenCalendar: (() -> Void)? = nil,
+        referenceDate: Date = .now,
+        usesNavigationStack: Bool = true
+    ) {
         self.onOpenCalendar = onOpenCalendar
+        self.referenceDate = referenceDate
+        self.usesNavigationStack = usesNavigationStack
+        _customRangeStart = State(initialValue: referenceDate)
+        _customRangeEnd = State(initialValue: referenceDate)
     }
 
     private var selectedRange: ComplianceDateRange {
         selectedFilter.dateRange(
             calendar: calendar,
-            now: .now,
+            now: referenceDate,
             customStart: customRangeStart,
             customEnd: customRangeEnd
         )
@@ -87,74 +98,126 @@ struct RecordsView: View {
         }
     }
 
+    private var recordGroups: [HistoryRecordGroup] {
+        Dictionary(grouping: filteredRecords) { record in
+            calendar.dateInterval(of: .month, for: record.date)?.start
+                ?? calendar.startOfDay(for: record.date)
+        }
+        .map { monthStart, records in
+            HistoryRecordGroup(monthStart: monthStart, records: records.sorted { $0.date > $1.date })
+        }
+        .sorted { $0.monthStart > $1.monthStart }
+    }
+
+    private var adjustedRecordCount: Int {
+        periodRecords.filter { $0.manualAdjustment != nil }.count
+    }
+
+    private var periodDateRangeTitle: String {
+        let start = selectedRange.start.formatted(.dateTime.day().month(.abbreviated).year())
+        let end = selectedRange.end.formatted(.dateTime.day().month(.abbreviated).year())
+        return start == end ? start : "\(start) – \(end)"
+    }
+
+    private var isFilteringRecords: Bool {
+        recordFilter != .all || !searchText.isEmpty
+    }
+
     var body: some View {
-        NavigationStack {
+        Group {
+            if usesNavigationStack { NavigationStack { screenContent } }
+            else { screenContent }
+        }
+    }
+
+    private var screenContent: some View {
+        Group {
             List {
                 Section {
-                    CompliancePeriodControls(
-                        selectedPreset: $selectedFilter,
-                        customStart: $customRangeStart,
-                        customEnd: $customRangeEnd,
-                        accessibilityPrefix: "records"
-                    )
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        HistoryFilterCard(
+                            selectedPreset: $selectedFilter,
+                            customStart: $customRangeStart,
+                            customEnd: $customRangeEnd,
+                            recordFilter: $recordFilter
+                        )
 
-                    Picker("Show", selection: $recordFilter) {
-                        ForEach(RecordFilter.allCases) { filter in
-                            Text(filter.displayName).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .accessibilityIdentifier("records.statusFilter")
-
-                    if let holidayCoverageWarning {
-                        Label {
-                            Text(holidayCoverageWarning)
-                                .font(AppTypography.caption)
-                                .foregroundStyle(Color.ds.textSecondary)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(Color.ds.warning)
-                        }
-                        .accessibilityIdentifier("records.holidayCoverageWarning")
+                        HistoryOverviewCard(
+                            dateRangeTitle: periodDateRangeTitle,
+                            recordCount: periodRecords.count,
+                            adjustedRecordCount: adjustedRecordCount
+                        )
                     }
                 }
+                .historyCardListRow()
 
-                Section {
-                    if filteredRecords.isEmpty {
+                if let holidayCoverageWarning {
+                    Section {
+                        DSInsightCallout(
+                            icon: "exclamationmark.triangle.fill",
+                            message: holidayCoverageWarning,
+                            highlightedText: "Holiday data unavailable"
+                        )
+                        .accessibilityIdentifier("records.holidayCoverageWarning")
+                    }
+                    .historyCardListRow()
+                }
+
+                if filteredRecords.isEmpty {
+                    Section {
                         VStack(spacing: AppSpacing.md) {
                             DSEmptyState(
-                                systemImage: "tray",
-                                title: searchText.isEmpty ? "No records" : "No matching records",
-                                message: searchText.isEmpty
-                                    ? "Saved attendance, leave and excluded days appear here."
-                                    : "Change the search or filter."
+                                systemImage: emptyStateImage,
+                                title: emptyStateTitle,
+                                message: emptyStateMessage
                             )
 
-                            if searchText.isEmpty {
+                            if periodRecords.isEmpty && !isFilteringRecords {
                                 calendarAction
                             }
                         }
-                        .listRowBackground(Color.clear)
-                    } else {
-                        ForEach(filteredRecords) { record in
-                            NavigationLink {
-                                DayDetailView(
-                                    date: record.date,
-                                    attendanceDay: record.attendanceDay,
-                                    leaveRecord: record.leaveRecord,
-                                    publicHoliday: record.publicHoliday,
-                                    customExcludedDay: record.customExcludedDay
+                        .frame(maxWidth: .infinity)
+                    }
+                    .historyCardListRow()
+                } else {
+                    ForEach(recordGroups) { group in
+                        Section {
+                            ForEach(group.records) { record in
+                                NavigationLink {
+                                    DayDetailView(
+                                        date: record.date,
+                                        attendanceDay: record.attendanceDay,
+                                        leaveRecord: record.leaveRecord,
+                                        publicHoliday: record.publicHoliday,
+                                        customExcludedDay: record.customExcludedDay
+                                    )
+                                } label: {
+                                    RecordRowView(record: record)
+                                }
+                                .listRowInsets(
+                                    EdgeInsets(
+                                        top: AppSpacing.xs,
+                                        leading: AppSpacing.screenHorizontal,
+                                        bottom: AppSpacing.xs,
+                                        trailing: AppSpacing.screenHorizontal
+                                    )
                                 )
-                            } label: {
-                                RecordRowView(record: record)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.visible)
                             }
+                        } header: {
+                            HistoryMonthHeader(
+                                title: group.title,
+                                recordCount: group.records.count
+                            )
                         }
                     }
                 }
             }
+            .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .appScreenBackground()
-            .navigationTitle("History")
+            .navigationTitle("Records")
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, prompt: "Status, note, or date")
             .toolbar {
@@ -170,6 +233,26 @@ struct RecordsView: View {
         }
     }
 
+    private var emptyStateImage: String {
+        periodRecords.isEmpty ? "tray" : "line.3.horizontal.decrease.circle"
+    }
+
+    private var emptyStateTitle: String {
+        if periodRecords.isEmpty {
+            return "No records in this period"
+        }
+
+        return "No matching records"
+    }
+
+    private var emptyStateMessage: String {
+        if periodRecords.isEmpty {
+            return "Attendance, leave, holidays and excluded days will appear here."
+        }
+
+        return "Change the search or filter to see more records."
+    }
+
     @ViewBuilder
     private var calendarAction: some View {
         if let onOpenCalendar {
@@ -178,205 +261,12 @@ struct RecordsView: View {
                 .accessibilityIdentifier("records.openCalendar")
         } else {
             NavigationLink {
-                MonthCalendarView()
+                MonthCalendarView(referenceDate: referenceDate)
             } label: {
                 Label("Open Calendar", systemImage: "calendar")
             }
             .buttonStyle(.borderedProminent)
             .accessibilityIdentifier("records.openCalendar")
-        }
-    }
-}
-
-private struct RecordRow: Identifiable {
-    let id: Date
-    let date: Date
-    let attendanceDay: AttendanceDay?
-    let leaveRecord: LeaveRecord?
-    let publicHoliday: PublicHoliday?
-    let customExcludedDay: CustomExcludedDay?
-    let manualAdjustment: ManualAdjustment?
-
-    init(
-        date: Date,
-        attendanceDay: AttendanceDay?,
-        leaveRecord: LeaveRecord?,
-        publicHoliday: PublicHoliday?,
-        customExcludedDay: CustomExcludedDay?,
-        manualAdjustment: ManualAdjustment?
-    ) {
-        self.id = date
-        self.date = date
-        self.attendanceDay = attendanceDay
-        self.leaveRecord = leaveRecord
-        self.publicHoliday = publicHoliday
-        self.customExcludedDay = customExcludedDay
-        self.manualAdjustment = manualAdjustment
-    }
-
-    var primaryStatus: String {
-        if let leaveType = leaveRecord?.leaveType {
-            return leaveType.displayName
-        }
-
-        if publicHoliday != nil {
-            return AttendanceClassification.publicHoliday.displayName
-        }
-
-        if customExcludedDay != nil {
-            return "Excluded"
-        }
-
-        return attendanceDay?.finalClassification?.displayName ?? AttendanceClassification.unknown.displayName
-    }
-
-    var detectedStatus: String {
-        attendanceDay?.detectedClassification?.displayName ?? AttendanceClassification.unknown.displayName
-    }
-
-    var note: String? {
-        leaveRecord?.note ?? customExcludedDay?.reason ?? manualAdjustment?.note ?? attendanceDay?.note
-    }
-
-    func matches(_ query: String) -> Bool {
-        let normalizedQuery = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        let values = [
-            date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()),
-            primaryStatus,
-            detectedStatus,
-            note ?? ""
-        ]
-        return values.contains { value in
-            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-                .contains(normalizedQuery)
-        }
-    }
-}
-
-private enum RecordFilter: String, CaseIterable, Identifiable {
-    case all
-    case attendance
-    case leave
-    case adjusted
-    case excluded
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .all: "All"
-        case .attendance: "Attendance"
-        case .leave: "Leave"
-        case .adjusted: "Overrides"
-        case .excluded: "Excluded"
-        }
-    }
-
-    func includes(_ record: RecordRow) -> Bool {
-        switch self {
-        case .all:
-            true
-        case .attendance:
-            record.attendanceDay != nil && record.leaveRecord == nil && record.customExcludedDay == nil
-        case .leave:
-            record.leaveRecord != nil
-        case .adjusted:
-            record.manualAdjustment != nil
-        case .excluded:
-            record.publicHoliday != nil || record.customExcludedDay != nil
-        }
-    }
-}
-
-private struct RecordRowView: View {
-    let record: RecordRow
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-                Text(record.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).year()))
-                    .font(AppTypography.callout.weight(.semibold))
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                Spacer(minLength: AppSpacing.sm)
-
-                DSStatusPill(
-                    text: record.primaryStatus,
-                    systemImage: statusImage,
-                    style: statusStyle
-                )
-            }
-
-            if record.manualAdjustment != nil {
-                DSStatusPill(text: "Override", systemImage: "pencil", style: .warning)
-            }
-
-            if let note = record.note, !note.isEmpty {
-                Text(note)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .lineLimit(3)
-            }
-        }
-        .padding(.vertical, AppSpacing.xs)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var statusImage: String {
-        if record.leaveRecord != nil {
-            return "sun.max"
-        }
-
-        if record.publicHoliday != nil {
-            return "sparkles"
-        }
-
-        if record.customExcludedDay != nil {
-            return "calendar.badge.minus"
-        }
-
-        switch record.attendanceDay?.finalClassification ?? .unknown {
-        case .office:
-            return "building.2"
-        case .home:
-            return "house"
-        case .mixed:
-            return "arrow.triangle.2.circlepath"
-        case .annualLeave, .sickLeave:
-            return "sun.max"
-        case .publicHoliday:
-            return "sparkles"
-        case .weekend, .nonWorkingDay:
-            return "calendar"
-        case .unknown:
-            return "questionmark.circle"
-        }
-    }
-
-    private var statusStyle: DSStatusPillStyle {
-        if record.leaveRecord != nil {
-            return .info
-        }
-
-        if record.publicHoliday != nil {
-            return .neutral
-        }
-
-        if record.customExcludedDay != nil {
-            return .neutral
-        }
-
-        switch record.attendanceDay?.finalClassification ?? .unknown {
-        case .office:
-            return .success
-        case .home, .mixed:
-            return .neutral
-        case .annualLeave, .sickLeave:
-            return .info
-        case .publicHoliday, .weekend, .nonWorkingDay:
-            return .neutral
-        case .unknown:
-            return .warning
         }
     }
 }
@@ -392,6 +282,6 @@ private extension Calendar {
 }
 
 #Preview {
-    RecordsView()
+    RecordsView(referenceDate: PreviewData.planConfidenceReferenceDate)
         .modelContainer(PreviewData.modelContainer())
 }

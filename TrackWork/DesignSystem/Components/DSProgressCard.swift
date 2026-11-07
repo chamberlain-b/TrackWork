@@ -40,38 +40,7 @@ struct DSProgressCard: View {
                     .labelStyle(.titleAndIcon)
             }
         }
-        .padding(AppSpacing.lg)
-        .background(.regularMaterial)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color.ds.surfaceBlueTint.opacity(0.82),
-                    Color.ds.surfacePrimary.opacity(0.52)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(cardShape)
-        .overlay {
-            cardShape.strokeBorder(
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.78),
-                        Color.ds.borderSubtle.opacity(0.52)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                lineWidth: 0.8
-            )
-        }
-        .shadow(
-            color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity * 0.72),
-            radius: AppShadow.cardRadius * 0.88,
-            x: 0,
-            y: AppShadow.cardY * 0.8
-        )
+
     }
 
     private var summary: some View {

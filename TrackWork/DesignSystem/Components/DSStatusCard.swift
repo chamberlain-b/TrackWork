@@ -13,7 +13,7 @@ struct DSStatusCard: View {
     var body: some View {
         DSCard {
             HStack(alignment: .top, spacing: AppSpacing.md) {
-                DSIconBadge(systemImage: systemImage, style: iconStyle, size: 62)
+                DSIconBadge(systemImage: systemImage, style: iconStyle, size: 32)
 
                 VStack(alignment: .leading, spacing: AppSpacing.sm) {
                     DSStatusPill(text: statusText, systemImage: "checkmark.circle.fill", style: statusStyle)

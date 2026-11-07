@@ -103,7 +103,7 @@ final class LocalJSONHolidayProviderTests: XCTestCase {
     func testHolidayCoverageMatchesBundledYears() {
         XCTAssertEqual(HolidayCoverage.supportedYears, Set([2026, 2027]))
         XCTAssertEqual(HolidayCoverage.displaySummary, "2026–2027 public holidays")
-        XCTAssertEqual(HolidayCoverage.statusText, "Verified through 2027")
+        XCTAssertEqual(HolidayCoverage.statusText, "Public holidays through 2027")
         XCTAssertTrue(HolidayCoverage.supports(year: 2026))
         XCTAssertTrue(HolidayCoverage.supports(year: 2027))
         XCTAssertFalse(HolidayCoverage.supports(year: 2028))
@@ -385,4 +385,202 @@ private extension Array where Element == PublicHoliday {
 
         return formatter.date(from: isoDate) ?? Date(timeIntervalSince1970: 0)
     }
+}
+
+@MainActor
+final class PolicyHolidayBootstrapTests: XCTestCase {
+    private let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    func testRepeatedFirstLaunchDoesNotCreateDefaultPolicyOrHolidays() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let bootstrap = PolicyHolidayBootstrap()
+
+        for _ in 0..<2 {
+            let policies = try context.fetch(FetchDescriptor<ComplianceRule>())
+            XCTAssertNil(try bootstrap.sync(policies: policies, in: context, now: date(2026, 10, 4)))
+        }
+
+        XCTAssertTrue(try context.fetch(FetchDescriptor<ComplianceRule>()).isEmpty)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<PublicHoliday>()).isEmpty)
+        XCTAssertFalse(context.hasChanges)
+    }
+
+    func testConfirmedDefaultRegionChangesStartupSignatureAndLoadsCalendar() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let emptySignature = PolicyHolidayBootstrap.selections(for: [])
+        let confirmedPolicy = ComplianceRule(fixedRequiredDays: 8)
+        context.insert(confirmedPolicy)
+        try context.save()
+
+        XCTAssertNotEqual(emptySignature, PolicyHolidayBootstrap.selections(for: [confirmedPolicy]))
+        XCTAssertNil(try PolicyHolidayBootstrap().sync(
+            policies: [confirmedPolicy], in: context, now: date(2026, 10, 4)
+        ))
+        XCTAssertEqual(try context.fetch(FetchDescriptor<PublicHoliday>()).count, 29)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<ComplianceRule>()).count, 1)
+    }
+
+    func testUpgradePreservesExistingPolicyAndAttendanceWithoutMigration() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let originalDate = date(2026, 6, 8)
+        let policy = ComplianceRule(
+            name: "Existing policy",
+            country: .australia,
+            jurisdictionId: "AU-NSW",
+            fixedRequiredDays: 7,
+            prorateFixedTargetForLeave: false,
+            minimumOfficeMinutes: 240,
+            selectedISOWeekdays: [1, 2, 3, 4],
+            preferredOfficeISOWeekdays: [2],
+            createdAt: originalDate,
+            updatedAt: originalDate
+        )
+        let attendance = AttendanceDay(
+            date: originalDate,
+            detectedClassification: .home,
+            finalClassification: .office,
+            manualClassification: .office,
+            complianceTreatment: .countsAsOffice,
+            officeMinutes: 420,
+            homeMinutes: 60,
+            note: "Keep this correction",
+            createdAt: originalDate,
+            updatedAt: originalDate
+        )
+        context.insert(policy)
+        context.insert(attendance)
+        try context.save()
+        let policyID = policy.id
+        let attendanceID = attendance.id
+
+        let bootstrap = PolicyHolidayBootstrap()
+        try bootstrap.sync(policies: [policy], in: context, now: date(2026, 10, 4))
+        try bootstrap.sync(policies: [policy], in: context, now: date(2026, 10, 4))
+
+        let persistedPolicy = try XCTUnwrap(context.fetch(FetchDescriptor<ComplianceRule>()).only)
+        XCTAssertEqual(persistedPolicy.id, policyID)
+        XCTAssertEqual(persistedPolicy.name, "Existing policy")
+        XCTAssertEqual(persistedPolicy.countryCode, "AU")
+        XCTAssertEqual(persistedPolicy.jurisdictionId, "AU-NSW")
+        XCTAssertEqual(persistedPolicy.fixedRequiredDays, 7)
+        XCTAssertEqual(persistedPolicy.selectedISOWeekdays, [1, 2, 3, 4])
+        XCTAssertEqual(persistedPolicy.preferredOfficeISOWeekdays, [2])
+        XCTAssertEqual(persistedPolicy.minimumOfficeMinutes, 240)
+        XCTAssertFalse(persistedPolicy.prorateFixedTargetForLeave)
+        XCTAssertNil(persistedPolicy.effectiveFrom)
+        XCTAssertEqual(persistedPolicy.createdAt, originalDate)
+        XCTAssertEqual(persistedPolicy.updatedAt, originalDate)
+        let persistedAttendance = try XCTUnwrap(context.fetch(FetchDescriptor<AttendanceDay>()).only)
+        XCTAssertEqual(persistedAttendance.id, attendanceID)
+        XCTAssertEqual(persistedAttendance.detectedClassification, .home)
+        XCTAssertEqual(persistedAttendance.finalClassification, .office)
+        XCTAssertEqual(persistedAttendance.manualClassification, .office)
+        XCTAssertEqual(persistedAttendance.officeMinutes, 420)
+        XCTAssertEqual(persistedAttendance.homeMinutes, 60)
+        XCTAssertEqual(persistedAttendance.note, "Keep this correction")
+        XCTAssertEqual(persistedAttendance.updatedAt, originalDate)
+    }
+
+    func testHistoricalRegionsRemainAvailableAndCalculationsUseOnlySelectedRegion() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let legacy = ComplianceRule(jurisdictionId: "AU-VIC")
+        let current = ComplianceRule(jurisdictionId: "AU-NSW", effectiveFrom: date(2026, 10, 1))
+        context.insert(legacy)
+        context.insert(current)
+        try context.save()
+
+        try PolicyHolidayBootstrap().sync(
+            policies: [current, legacy], in: context, now: date(2026, 10, 4)
+        )
+        let holidays = try context.fetch(FetchDescriptor<PublicHoliday>())
+        XCTAssertEqual(Set(holidays.map(\.jurisdictionId)), ["AU-NSW", "AU-VIC"])
+
+        let resolver = ComplianceRuleResolver()
+        let labourDay = date(2026, 3, 9)
+        let cupDay = date(2026, 11, 3)
+        let oldPolicy = try XCTUnwrap(resolver.rule(for: labourDay, from: [legacy, current]))
+        let currentPolicy = try XCTUnwrap(resolver.rule(for: cupDay, from: [legacy, current]))
+        XCTAssertEqual(eligibleDays(on: labourDay, policy: oldPolicy, holidays: holidays), 0)
+        XCTAssertEqual(eligibleDays(on: cupDay, policy: currentPolicy, holidays: holidays), 1)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<ComplianceRule>()).count, 2)
+        XCTAssertNil(legacy.effectiveFrom)
+        XCTAssertEqual(current.effectiveFrom, date(2026, 10, 1))
+    }
+
+    func testSignatureDeduplicatesRegionsAndRespondsToRegionEdits() {
+        let legacy = ComplianceRule(jurisdictionId: "AU-VIC")
+        let revision = ComplianceRule(jurisdictionId: "AU-VIC", effectiveFrom: date(2026, 10, 1))
+        let beforeEdit = PolicyHolidayBootstrap.selections(for: [legacy, revision])
+        XCTAssertEqual(beforeEdit.count, 1)
+        XCTAssertEqual(beforeEdit, PolicyHolidayBootstrap.selections(for: [revision, legacy]))
+
+        revision.jurisdictionId = "AU-NSW"
+        let afterEdit = PolicyHolidayBootstrap.selections(for: [legacy, revision])
+        XCTAssertNotEqual(afterEdit, beforeEdit)
+        XCTAssertEqual(afterEdit.map(\.jurisdictionId), ["AU-NSW", "AU-VIC"])
+    }
+
+    func testHolidayFailureLeavesPolicyIntactAndCanBeRetried() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let policy = ComplianceRule(fixedRequiredDays: 7)
+        context.insert(policy)
+        try context.save()
+        let failingBootstrap = PolicyHolidayBootstrap(syncService: HolidaySyncService(
+            provider: FailingStartupHolidayProvider(), calendar: calendar
+        ))
+
+        XCTAssertThrowsError(try failingBootstrap.sync(policies: [policy], in: context))
+        XCTAssertEqual(try context.fetch(FetchDescriptor<ComplianceRule>()).only?.id, policy.id)
+        XCTAssertEqual(policy.fixedRequiredDays, 7)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<PublicHoliday>()).isEmpty)
+
+        XCTAssertNil(try PolicyHolidayBootstrap().sync(
+            policies: [policy], in: context, now: date(2026, 10, 4)
+        ))
+        XCTAssertFalse(try context.fetch(FetchDescriptor<PublicHoliday>()).isEmpty)
+    }
+
+    private func makeContainer() throws -> ModelContainer {
+        let schema = Schema([ComplianceRule.self, PublicHoliday.self, AttendanceDay.self])
+        return try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+        )
+    }
+
+    private func eligibleDays(on date: Date, policy: ComplianceRule, holidays: [PublicHoliday]) -> Int {
+        CompliancePeriodEvaluator().evaluate(.init(
+            range: ComplianceDateRange(start: date, end: date, calendar: calendar),
+            calendar: calendar,
+            rule: policy,
+            attendanceDays: [],
+            leaveRecords: [],
+            publicHolidays: holidays,
+            customExcludedDays: [],
+            evaluationDate: date
+        )).baseEligibleDays
+    }
+
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+}
+
+private struct FailingStartupHolidayProvider: HolidayProvider {
+    func holidays(for country: Country, jurisdictionId: String, year: Int) throws -> [PublicHoliday] {
+        throw HolidayProviderError.missingFile(fileName: "test-unavailable-calendar")
+    }
+}
+
+private extension Array {
+    var only: Element? { count == 1 ? first : nil }
 }

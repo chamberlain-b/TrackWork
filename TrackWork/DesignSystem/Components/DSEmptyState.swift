@@ -11,7 +11,7 @@ struct DSEmptyState: View {
     var body: some View {
         VStack(spacing: AppSpacing.md) {
             if let systemImage {
-                DSIconBadge(systemImage: systemImage, style: .accent, size: 64)
+                DSIconBadge(systemImage: systemImage, style: .accent, size: 32)
             }
 
             VStack(spacing: AppSpacing.xs) {

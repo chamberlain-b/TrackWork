@@ -53,6 +53,8 @@ struct PortableBackupView: View {
                 Text("JSON backups are not encrypted.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Backup & Restore")
         .navigationBarTitleDisplayMode(.inline)
         .fileExporter(

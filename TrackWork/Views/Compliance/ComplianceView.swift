@@ -15,22 +15,28 @@ struct ComplianceView: View {
 
     private let usesNavigationStack: Bool
     private let title: String
+    private let referenceDate: Date
+    private let reportingSelection: ReportingPeriodSelection?
     private let calendar = Calendar.complianceCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
     private let ruleResolver = ComplianceRuleResolver()
     private let trendCalculator = ComplianceTrendCalculator()
 
-    init(usesNavigationStack: Bool = true, title: String = "Compliance") {
+    init(usesNavigationStack: Bool = true, title: String = "Compliance",
+         reportingSelection: ReportingPeriodSelection? = nil, referenceDate: Date = .now) {
         self.usesNavigationStack = usesNavigationStack
         self.title = title
+        self.reportingSelection = reportingSelection
+        self.referenceDate = referenceDate
     }
 
     private var today: Date {
-        calendar.startOfDay(for: .now)
+        calendar.startOfDay(for: referenceDate)
     }
 
     private var periodRange: ComplianceDateRange {
-        selectedPeriod.dateRange(
+        if let reportingSelection { return reportingSelection.range(calendar: calendar, referenceDate: referenceDate) }
+        return selectedPeriod.dateRange(
             calendar: calendar,
             now: today,
             customStart: customRangeStart,
@@ -194,7 +200,7 @@ struct ComplianceView: View {
     private var screenContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                periodSection
+                if reportingSelection == nil { periodSection }
                 if let holidayCoverageWarning {
                     DSInsightCallout(
                         icon: "exclamationmark.triangle.fill",

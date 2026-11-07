@@ -51,7 +51,7 @@ struct PrivacyDataView: View {
                     )
                 } icon: {
                     Image(systemName: "iphone.and.arrow.forward")
-                        .foregroundStyle(Color.ds.accentPrimary)
+                        .foregroundStyle(Color.ds.interactionPrimary)
                 }
 
                 Label {
@@ -127,7 +127,9 @@ struct PrivacyDataView: View {
                     isShowingDeleteConfirmation = true
                 } label: {
                     Label("Delete All On-Device Data", systemImage: "trash")
+                        .foregroundStyle(Color.ds.critical)
                 }
+                .tint(Color.ds.critical)
                 .accessibilityIdentifier("privacyData.deleteAll")
 
                 if let resetResult {
@@ -141,6 +143,8 @@ struct PrivacyDataView: View {
                 Text("Does not revoke iOS location access or delete shared reports.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Privacy & Data")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Delete all on-device data?", isPresented: $isShowingDeleteConfirmation) {

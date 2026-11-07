@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-struct SettingsLocationSection: View {
+struct SettingsTrackingSection: View {
     var body: some View {
         Section {
             NavigationLink {
@@ -19,18 +19,64 @@ struct SettingsLocationSection: View {
             .accessibilityIdentifier("settings.locations")
 
         } header: {
-            Text("Location")
+            Text("Automatic attendance · Optional")
+                .foregroundStyle(Color.ds.textSecondary)
+        } footer: {
+            Text("You can record attendance manually in Calendar. Location access is needed only for automatic attendance and location checks.")
+                .foregroundStyle(Color.ds.textSecondary)
         }
     }
 }
 
-struct SettingsRegionSection: View {
+struct SettingsWorkPolicySection: View {
     let availableJurisdictions: [Jurisdiction]
+    let workdays: [SettingsWorkdaySelection]
+    let preferredOfficeDays: [SettingsWorkdaySelection]
+
     @Binding var country: Country
     @Binding var jurisdictionId: String
+    @Binding var requirementType: RequirementType
+    @Binding var fixedRequiredDays: String
+    @Binding var requiredPercentageInput: String
+    @Binding var prorateFixedTarget: Bool
 
     var body: some View {
         Section {
+            Picker("Target type", selection: $requirementType) {
+                ForEach(RequirementType.allCases) { requirementType in
+                    Text(requirementType.displayName)
+                        .tag(requirementType)
+                }
+            }
+            .accessibilityIdentifier("settings.requirementType")
+
+            targetValue
+
+            if requirementType == .fixedMonthlyDays {
+                Toggle("Reduce target for full-day leave", isOn: $prorateFixedTarget)
+                    .accessibilityIdentifier("settings.prorateFixedTarget")
+            }
+
+            NavigationLink {
+                SettingsWorkdaysView(workdays: workdays)
+            } label: {
+                LabeledContent("Workdays") {
+                    Text(selectedWorkdaysSummary)
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+            }
+            .accessibilityIdentifier("settings.workdays")
+
+            NavigationLink {
+                SettingsPreferredOfficeDaysView(workdays: preferredOfficeDays)
+            } label: {
+                LabeledContent("Preferred office days") {
+                    Text(preferredOfficeDaysSummary)
+                        .foregroundStyle(Color.ds.textSecondary)
+                }
+            }
+            .accessibilityIdentifier("settings.preferredOfficeDays")
+
             Picker("Country", selection: $country) {
                 ForEach(Country.allCases) { country in
                     Text(country.displayName)
@@ -46,103 +92,46 @@ struct SettingsRegionSection: View {
                 }
             }
             .accessibilityIdentifier("settings.jurisdiction")
+
+            Label(HolidayCoverage.statusText, systemImage: "checkmark.seal.fill")
+                .foregroundStyle(Color.ds.success)
         } header: {
-            Text("Public holidays")
-        }
-    }
-}
-
-struct SettingsComplianceRuleSection: View {
-    @Binding var requirementType: RequirementType
-    @Binding var fixedRequiredDays: Int
-    @Binding var requiredPercentageInput: Double
-    @Binding var prorateFixedTarget: Bool
-
-    var body: some View {
-        Section {
-            Picker("Target type", selection: $requirementType) {
-                ForEach(RequirementType.allCases) { requirementType in
-                    Text(requirementType.displayName)
-                        .tag(requirementType)
-                }
-            }
-            .accessibilityIdentifier("settings.requirementType")
-
-            if requirementType == .fixedMonthlyDays {
-                LabeledContent("Days per month") {
-                    TextField("Days", value: $fixedRequiredDays, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .accessibilityIdentifier("settings.fixedRequiredDays")
-                }
-
-                Toggle("Reduce for full-day leave", isOn: $prorateFixedTarget)
-                    .accessibilityIdentifier("settings.prorateFixedTarget")
-            } else {
-                LabeledContent("Required office rate") {
-                    HStack(spacing: AppSpacing.xxs) {
-                        TextField(
-                            "Percent",
-                            value: $requiredPercentageInput,
-                            format: .number.precision(.fractionLength(0...2))
-                        )
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 72)
-
-                        Text("%")
-                            .foregroundStyle(Color.ds.textSecondary)
-                    }
-                }
-            }
-        } header: {
-            Text("Office target")
+            Text("Work policy")
+                .foregroundStyle(Color.ds.textSecondary)
         } footer: {
-            if requirementType == .fixedMonthlyDays {
-                Text("When enabled, full-day leave lowers the target.")
-            } else {
-                Text("Based on eligible workdays.")
-            }
+            Text(workPolicyFooter)
+                .foregroundStyle(Color.ds.textSecondary)
         }
     }
-}
 
-struct SettingsWorkScheduleSection: View {
-    @Binding var minimumOfficeMinutes: Int
-    let workdays: [SettingsWorkdaySelection]
-    let preferredOfficeDays: [SettingsWorkdaySelection]
-
-    var body: some View {
-        Section {
-            NavigationLink {
-                SettingsWorkdaysView(workdays: workdays)
-            } label: {
-                LabeledContent("Workdays", value: selectedWorkdaysSummary)
+    @ViewBuilder
+    private var targetValue: some View {
+        if requirementType == .fixedMonthlyDays {
+            LabeledContent("Days per month") {
+                TextField("Days", text: $fixedRequiredDays)
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 80, idealWidth: 100, maxWidth: 160)
+                    .accessibilityIdentifier("settings.fixedRequiredDays")
             }
-            .accessibilityIdentifier("settings.workdays")
-
-            NavigationLink {
-                SettingsPreferredOfficeDaysView(workdays: preferredOfficeDays)
-            } label: {
-                LabeledContent("Preferred office days", value: preferredOfficeDaysSummary)
-            }
-            .accessibilityIdentifier("settings.preferredOfficeDays")
-
-            LabeledContent("Minimum office time") {
+        } else {
+            LabeledContent("Required office rate") {
                 HStack(spacing: AppSpacing.xxs) {
-                    TextField("Minutes", value: $minimumOfficeMinutes, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 72)
+                    TextField(
+                        "Percent",
+                        text: $requiredPercentageInput
+                    )
+                    .accessibilityIdentifier("settings.requiredPercentage")
+                    .foregroundStyle(Color.ds.textPrimary)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 80, idealWidth: 100, maxWidth: 160)
 
-                    Text("min")
+                    Text("%")
                         .foregroundStyle(Color.ds.textSecondary)
                 }
             }
-        } header: {
-            Text("Work schedule")
-        } footer: {
-            Text("For days split between home and office.")
         }
     }
 
@@ -169,9 +158,20 @@ struct SettingsWorkScheduleSection: View {
             .map { String($0.name.prefix(3)) }
             .joined(separator: ", ")
     }
+
+    private var workPolicyFooter: String {
+        switch requirementType {
+        case .fixedMonthlyDays:
+            prorateFixedTarget
+                ? "Full-day leave lowers the target when it removes an eligible workday."
+                : "Full-day leave does not change the fixed target."
+        case .percentageOfEligibleDays:
+            "The target is rounded up from eligible workdays."
+        }
+    }
 }
 
-private struct SettingsWorkdaysView: View {
+struct SettingsWorkdaysView: View {
     let workdays: [SettingsWorkdaySelection]
 
     var body: some View {
@@ -182,6 +182,7 @@ private struct SettingsWorkdaysView: View {
                 }
             } footer: {
                 Text("At least one workday is required.")
+                    .foregroundStyle(Color.ds.textSecondary)
             }
         }
         .scrollContentBackground(.hidden)
@@ -191,7 +192,7 @@ private struct SettingsWorkdaysView: View {
     }
 }
 
-private struct SettingsPreferredOfficeDaysView: View {
+struct SettingsPreferredOfficeDaysView: View {
     let workdays: [SettingsWorkdaySelection]
 
     var body: some View {
@@ -202,29 +203,13 @@ private struct SettingsPreferredOfficeDaysView: View {
                 }
             } footer: {
                 Text("Suggest Days uses these first, then fills any remaining need chronologically.")
+                    .foregroundStyle(Color.ds.textSecondary)
             }
         }
         .scrollContentBackground(.hidden)
         .appScreenBackground()
         .navigationTitle("Preferred Office Days")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-struct SettingsSetupSummarySection: View {
-    let target: String
-    let workdays: String
-    let region: String
-    let automaticAttendance: String
-
-    var body: some View {
-        Section("Setup") {
-            LabeledContent("Target", value: target)
-            LabeledContent("Workdays", value: workdays)
-            LabeledContent("Region", value: region)
-            LabeledContent("Automatic Attendance", value: automaticAttendance)
-        }
-        .accessibilityIdentifier("settings.setupSummary")
     }
 }
 
@@ -280,9 +265,11 @@ struct SettingsReviewReminderSection: View {
                     .foregroundStyle(Color.ds.critical)
             }
         } header: {
-            Text("Reminder")
+            Text("Notifications")
+                .foregroundStyle(Color.ds.textSecondary)
         } footer: {
             Text("Runs on device. Notification content is private.")
+                .foregroundStyle(Color.ds.textSecondary)
         }
         .task {
             await reminderService.refreshStatus()
@@ -307,19 +294,6 @@ struct SettingsReviewReminderSection: View {
     }
 }
 
-struct SettingsHolidayCoverageSection: View {
-    var body: some View {
-        Section {
-            Label(HolidayCoverage.statusText, systemImage: "checkmark.seal.fill")
-                .foregroundStyle(Color.ds.success)
-        } header: {
-            Text("Holiday data")
-        } footer: {
-            Text("Update the app for later years.")
-        }
-    }
-}
-
 struct SettingsPrivacyDataSection: View {
     var body: some View {
         Section {
@@ -330,7 +304,8 @@ struct SettingsPrivacyDataSection: View {
             }
             .accessibilityIdentifier("settings.privacyData")
         } header: {
-            Text("Data")
+            Text("Privacy & data")
+                .foregroundStyle(Color.ds.textSecondary)
         }
     }
 }
@@ -338,6 +313,16 @@ struct SettingsPrivacyDataSection: View {
 struct SettingsWorkday: Identifiable {
     let id: Int
     let name: String
+
+    static let all = [
+        SettingsWorkday(id: 1, name: "Monday"),
+        SettingsWorkday(id: 2, name: "Tuesday"),
+        SettingsWorkday(id: 3, name: "Wednesday"),
+        SettingsWorkday(id: 4, name: "Thursday"),
+        SettingsWorkday(id: 5, name: "Friday"),
+        SettingsWorkday(id: 6, name: "Saturday"),
+        SettingsWorkday(id: 7, name: "Sunday")
+    ]
 }
 
 struct SettingsWorkdaySelection: Identifiable {

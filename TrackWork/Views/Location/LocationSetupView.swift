@@ -13,24 +13,40 @@ struct LocationSetupView: View {
         place(for: .office)
     }
 
+    private var hasActivePlaces: Bool {
+        places.contains { $0.isActive && $0.type != nil }
+    }
+
     var body: some View {
         List {
             Section {
-                NavigationLink {
-                    QuickCheckInView()
-                } label: {
-                    Label("Check In", systemImage: "location.circle.fill")
-                }
-                .accessibilityIdentifier("locationSetup.quickCheckIn")
-
                 placeRow(for: .home, place: homePlace)
                 placeRow(for: .office, place: officePlace)
             } header: {
                 Text("Places")
             } footer: {
-                Text("Saved locations stay on this device.")
+                VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                    Text("Locations are optional. Choose an address or map point for Check In or Automatic Attendance. Saved locations stay on this device.")
+                    Text("Manual attendance works without saved locations or location access.")
+                        .accessibilityIdentifier("locationSetup.manualAttendance")
+                }
+            }
+
+            if hasActivePlaces {
+                Section {
+                    NavigationLink {
+                        QuickCheckInView()
+                    } label: {
+                        Label("Check In", systemImage: "location.circle.fill")
+                    }
+                    .accessibilityIdentifier("locationSetup.quickCheckIn")
+                } footer: {
+                    Text("Check In compares one location sample with your saved places.")
+                }
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Locations")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -44,9 +60,9 @@ struct LocationSetupView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: placeType.systemImageName)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.ds.textInverse)
                     .frame(width: 32, height: 32)
-                    .background(place == nil ? Color.ds.textTertiary : Color.ds.success)
+                    .background(place?.isActive == true ? Color.ds.success : Color.ds.textTertiary)
                     .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -57,7 +73,7 @@ struct LocationSetupView: View {
                     Text(summary(for: place))
                         .font(AppTypography.caption)
                         .foregroundStyle(Color.ds.textSecondary)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .padding(.vertical, 4)
@@ -72,11 +88,12 @@ struct LocationSetupView: View {
 
     private func summary(for place: Place?) -> String {
         guard let place else {
-            return "Not configured"
+            return "Not saved"
         }
 
         let radius = place.radiusMeters.formatted(.number.precision(.fractionLength(0)))
-        return "\(place.displayAddress) · \(radius) m area"
+        let area = "\(place.displayAddress) · \(radius) m area"
+        return place.isActive ? area : "Inactive · \(area)"
     }
 
 }

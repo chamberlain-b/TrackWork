@@ -62,7 +62,7 @@ struct MapPickerView: View {
                 HStack(alignment: .top, spacing: AppSpacing.sm) {
                     Image(systemName: "mappin.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(Color.ds.accentPrimary)
+                        .foregroundStyle(Color.ds.interactionPrimary)
 
                     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                         Text("Selected place")

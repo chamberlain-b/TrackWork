@@ -34,6 +34,7 @@ struct DSStatusPill: View {
     let text: String
     var systemImage: String?
     var style: DSStatusPillStyle = .neutral
+    var statusColor: Color? = nil
 
     var body: some View {
         Label {
@@ -41,23 +42,23 @@ struct DSStatusPill: View {
                 .font(AppTypography.captionStrong)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
-                .foregroundStyle(style.foreground)
+                .foregroundStyle(Color.ds.textPrimary)
         } icon: {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(style.foreground)
+                    .foregroundStyle(statusColor ?? style.foreground)
             }
         }
         .padding(.horizontal, AppSpacing.sm)
         .padding(.vertical, AppSpacing.xs)
         .background(
-            style.background,
+            Color.ds.surfaceSecondary,
             in: RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: pillCornerRadius, style: .continuous)
-                .stroke(style.foreground.opacity(0.16), lineWidth: 1)
+                .stroke((statusColor ?? style.foreground).opacity(0.16), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)
     }

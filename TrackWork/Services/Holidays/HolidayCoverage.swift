@@ -22,7 +22,7 @@ enum HolidayCoverage {
 
     static let supportedYears: Set<Int> = [2026, 2027]
     static let displaySummary = "2026–2027 public holidays"
-    static let statusText = "Verified through 2027"
+    static let statusText = "Public holidays through 2027"
 
     static func supports(year: Int) -> Bool {
         supportedYears.contains(year)

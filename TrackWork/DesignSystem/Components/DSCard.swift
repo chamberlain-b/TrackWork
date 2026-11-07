@@ -4,7 +4,7 @@ struct DSCard<Content: View>: View {
     private let includesShadow: Bool
     private let content: Content
 
-    init(includesShadow: Bool = true, @ViewBuilder content: () -> Content) {
+    init(includesShadow: Bool = false, @ViewBuilder content: () -> Content) {
         self.includesShadow = includesShadow
         self.content = content()
     }

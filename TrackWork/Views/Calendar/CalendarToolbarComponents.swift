@@ -44,7 +44,7 @@ struct CalendarPrimaryToolbar: ToolbarContent {
 struct CalendarLegendGrid: View {
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 132), spacing: AppSpacing.xs)],
+            columns: [GridItem(.adaptive(minimum: 100), spacing: AppSpacing.xs)],
             spacing: AppSpacing.xs
         ) {
             LegendPill(text: "Office", systemImage: "building.2.fill", color: Color.ds.officeDay)

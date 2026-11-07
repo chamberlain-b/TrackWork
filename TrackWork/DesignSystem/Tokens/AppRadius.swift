@@ -7,10 +7,10 @@ enum AppRadius {
     static let lg: CGFloat = 16
     static let xl: CGFloat = 20
     static let xxl: CGFloat = 28
-    static let card: CGFloat = 22
-    static let heroCard: CGFloat = 24
-    static let button: CGFloat = 18
-    static let iconBadge: CGFloat = 24
+    static let card: CGFloat = 16
+    static let heroCard: CGFloat = 20
+    static let button: CGFloat = 12
+    static let iconBadge: CGFloat = 12
     static let tabBar: CGFloat = 28
     static let pill: CGFloat = 999
 }

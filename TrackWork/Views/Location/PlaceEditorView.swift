@@ -140,6 +140,8 @@ struct PlaceEditorView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle(placeType.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .scrollDismissesKeyboard(.interactively)
@@ -201,7 +203,7 @@ struct PlaceEditorView: View {
         } icon: {
             Image(systemName: "mappin.circle.fill")
                 .font(.title2)
-                .foregroundStyle(Color.ds.accentPrimary)
+                .foregroundStyle(Color.ds.interactionPrimary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("placeEditor.selectedPlace")

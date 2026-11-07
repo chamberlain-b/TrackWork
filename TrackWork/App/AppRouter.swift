@@ -4,26 +4,22 @@ import SwiftUI
 struct AppRouter: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Place.typeRaw) private var places: [Place]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
     @State private var locationTrackingService = LocationTrackingService()
     @State private var privacyLockService = AppPrivacyLockService()
     @State private var holidaySyncError: String?
 
-    private let holidaySyncService = HolidaySyncService()
-    private let ruleResolver = ComplianceRuleResolver()
+    private let holidayBootstrap = PolicyHolidayBootstrap()
 
     @MainActor
     private var placeMonitoringSignature: [PlaceMonitoringSignature] {
         places.map(PlaceMonitoringSignature.init)
     }
 
-    private var holidayRuleSignature: HolidayRuleSignature {
-        let rule = ruleResolver.currentRule(from: complianceRules)
-        return HolidayRuleSignature(
-            countryCode: rule?.countryCode ?? Country.australia.rawValue,
-            jurisdictionId: rule?.jurisdictionId ?? "AU-VIC"
-        )
+    private var holidayRuleSignature: [PolicyHolidayBootstrap.Selection] {
+        PolicyHolidayBootstrap.selections(for: complianceRules)
     }
 
     var body: some View {
@@ -42,12 +38,13 @@ struct AppRouter: View {
                 .zIndex(10)
             }
         }
-            .animation(.easeInOut(duration: 0.16), value: privacyLockService.isContentObscured)
+            .animation(reduceMotion ? nil : AppMotion.quick, value: privacyLockService.isContentObscured)
             .task {
                 if !AppLaunchConfiguration.isUITesting {
                     // Configure the on-device event journal before authentication can delay the UI.
                     locationTrackingService.configure(modelContext: modelContext)
                     locationTrackingService.refreshMonitoring(for: places)
+                    locationTrackingService.setForegroundActive(scenePhase == .active)
                 }
 
                 await privacyLockService.unlockIfNeeded()
@@ -60,6 +57,9 @@ struct AppRouter: View {
                 locationTrackingService.refreshMonitoring(for: places)
             }
             .onChange(of: scenePhase) { _, phase in
+                if !AppLaunchConfiguration.isUITesting {
+                    locationTrackingService.setForegroundActive(phase == .active)
+                }
                 switch phase {
                 case .active:
                     Task { await privacyLockService.unlockIfNeeded() }
@@ -71,8 +71,18 @@ struct AppRouter: View {
                     privacyLockService.lockAndObscure()
                 }
             }
+            .task {
+                guard !AppLaunchConfiguration.isUITesting else { return }
+                for await _ in NotificationCenter.default.notifications(
+                    named: UIApplication.significantTimeChangeNotification
+                ) {
+                    if scenePhase == .active {
+                        locationTrackingService.setForegroundActive(true)
+                    }
+                }
+            }
             .task(id: holidayRuleSignature) {
-                guard !AppLaunchConfiguration.isUITesting else {
+                guard AppLaunchConfiguration.shouldBootstrapHolidays else {
                     return
                 }
 
@@ -98,35 +108,15 @@ struct AppRouter: View {
     }
 
     private func bootstrapHolidays() {
-        let rule = activeRule()
-        guard let country = rule.country else {
-            holidaySyncError = "The selected country is not supported."
-            return
-        }
-
-        let currentYear = Calendar.current.component(.year, from: .now)
         do {
-            try holidaySyncService.sync(
-                country: country,
-                jurisdictionId: rule.jurisdictionId,
-                years: HolidayCoverage.supportedYears,
-                in: modelContext
+            holidaySyncError = try holidayBootstrap.sync(
+                policies: complianceRules,
+                in: modelContext,
+                now: AppLaunchConfiguration.dashboardReferenceDate
             )
-            holidaySyncError = HolidayCoverage.validation(forYear: currentYear).userFacingMessage
         } catch {
             holidaySyncError = error.localizedDescription
         }
-    }
-
-    private func activeRule() -> ComplianceRule {
-        if let rule = ruleResolver.currentRule(from: complianceRules) {
-            return rule
-        }
-
-        let rule = ComplianceRule()
-        modelContext.insert(rule)
-        try? modelContext.save()
-        return rule
     }
 
     private func unlock() {
@@ -206,11 +196,6 @@ private struct PlaceMonitoringSignature: Equatable {
         self.radiusMeters = place.radiusMeters
         self.isActive = place.isActive
     }
-}
-
-private struct HolidayRuleSignature: Equatable {
-    let countryCode: String
-    let jurisdictionId: String
 }
 
 #Preview {

@@ -206,68 +206,88 @@ struct DayDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                DayDetailHeaderCard(
-                    date: date,
-                    detectedStatus: detectedStatus,
-                    finalStatus: finalStatus,
-                    isUpcoming: isFutureDate
-                        && selectedLeave == .none
-                        && !isCustomExcluded
-                        && activePublicHoliday == nil,
-                    complianceTreatment: complianceTreatment(for: finalStatus)
-                )
-
-                if let activePublicHoliday {
-                    DayDetailHolidayCard(holiday: activePublicHoliday)
-                }
-
+        Form {
+            Section {
                 if isFutureDate {
-                    DSInsightCallout(
-                        icon: "calendar.badge.plus",
-                        message: futureDateMessage,
-                        highlightedText: "Future date"
-                    )
+                    Label(futureDateMessage, systemImage: "calendar.badge.plus")
+                        .font(AppTypography.callout)
+                        .foregroundStyle(Color.ds.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    DayDetailManualStatusCard(
+                    DayDetailStatusFields(
                         selectedStatus: $selectedStatus,
                         selectedReason: $selectedReason,
-                        isLeaveSelected: selectedLeave.leaveType != nil
+                        isStatusLocked: selectedLeave.leaveType != nil
                             || isCustomExcluded
                             || activePublicHoliday != nil,
+                        finalStatus: finalStatus,
                         requiresOverrideReason: requiresOverrideReason
                     )
                 }
 
-                DayDetailLeaveCard(
-                    selectedLeave: $selectedLeave,
-                    eligibleDayImpactText: eligibleDayImpactText,
-                    eligibleDayImpactReason: eligibleDayImpactReason,
-                    leaveReducesEligibleDay: leaveReducesEligibleDay
-                )
+                if let activePublicHoliday {
+                    Label(activePublicHoliday.name, systemImage: "sparkles")
+                        .foregroundStyle(Color.ds.publicHoliday)
+                        .accessibilityIdentifier("dayDetail.publicHoliday")
+                }
+            } header: {
+                Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide).year()))
+                    .textCase(nil)
+            }
 
-                DayDetailCustomExclusionCard(
+            Section("Optional") {
+                DayDetailLeaveFields(selectedLeave: $selectedLeave)
+                DayDetailExclusionFields(
                     isExcluded: $isCustomExcluded,
-                    reason: $customExclusionReason,
-                    eligibleDayImpactText: customExclusionImpactText,
-                    eligibleDayImpactReason: customExclusionImpactReason,
-                    reducesEligibleDay: customExclusionReducesEligibleDay
+                    reason: $customExclusionReason
                 )
 
-                if let attendanceDay, !isFutureDate {
-                    DayDetailAttendanceCard(attendanceDay: attendanceDay)
+                if canSave {
+                    DayDetailNoteField(note: $note)
                 }
+            }
 
-                if !isFutureDate
-                    || selectedLeave != .none
-                    || existingLeaveRecord != nil
-                    || isCustomExcluded
-                    || existingCustomExcludedDay != nil {
-                    DayDetailNoteCard(note: $note)
+            Section {
+                DisclosureGroup("How this day is counted") {
+                    DayDetailStatusDetails(
+                        detectedStatus: detectedStatus,
+                        finalStatus: finalStatus,
+                        isUpcoming: isFutureDate
+                            && selectedLeave == .none
+                            && !isCustomExcluded
+                            && activePublicHoliday == nil,
+                        complianceTreatment: complianceTreatment(for: finalStatus)
+                    )
+
+                    DayDetailEligibilityDetails(
+                        title: "Leave eligibility reduction",
+                        impact: eligibleDayImpactText,
+                        explanation: eligibleDayImpactReason,
+                        color: leaveReducesEligibleDay ? Color.ds.leaveDay : Color.ds.textSecondary
+                    )
+
+                    if isCustomExcluded {
+                        DayDetailEligibilityDetails(
+                            title: "Exclusion eligibility reduction",
+                            impact: customExclusionImpactText,
+                            explanation: customExclusionImpactReason,
+                            color: Color.ds.textSecondary
+                        )
+                    }
+
+                    if let attendanceDay, !isFutureDate {
+                        DayDetailAttendanceDetails(attendanceDay: attendanceDay)
+                    }
+
+                    if let activePublicHoliday {
+                        DayDetailHolidayDetails(holiday: activePublicHoliday)
+                    }
                 }
+                .accessibilityIdentifier("dayDetail.countingDetails")
+            }
 
-                if let saveError {
+            if let saveError {
+                Section {
                     DSInsightCallout(
                         icon: "exclamationmark.triangle",
                         message: saveError,
@@ -275,16 +295,16 @@ struct DayDetailView: View {
                     )
                 }
             }
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-            .padding(.vertical, AppSpacing.lg)
         }
+        .scrollContentBackground(.hidden)
         .appScreenBackground()
         .navigationTitle(date.formatted(.dateTime.day().month(.wide)))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: saveChanges)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Color.ds.textInverse)
                     .disabled(!canSave)
                     .accessibilityIdentifier("dayDetail.save")
             }

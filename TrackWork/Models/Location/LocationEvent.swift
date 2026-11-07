@@ -4,6 +4,9 @@ import SwiftData
 enum LocationEventKind: String, Codable, CaseIterable, Identifiable {
     case entered
     case exited
+    case confirmedInside
+    case confirmedOutside
+    case monitoringStopped
 
     var id: String { rawValue }
 }
@@ -57,6 +60,12 @@ extension LocationEventKind {
             "Entered"
         case .exited:
             "Exited"
+        case .confirmedInside:
+            "Confirmed inside"
+        case .confirmedOutside:
+            "Confirmed outside"
+        case .monitoringStopped:
+            "Monitoring stopped"
         }
     }
 
@@ -66,6 +75,12 @@ extension LocationEventKind {
             "arrow.down.forward.circle.fill"
         case .exited:
             "arrow.up.forward.circle.fill"
+        case .confirmedInside:
+            "checkmark.circle.fill"
+        case .confirmedOutside:
+            "circle.dashed"
+        case .monitoringStopped:
+            "pause.circle"
         }
     }
 }

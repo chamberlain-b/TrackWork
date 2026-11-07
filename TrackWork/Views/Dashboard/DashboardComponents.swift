@@ -313,11 +313,6 @@ private struct DashboardCalendarAction: View {
         .padding(.vertical, AppSpacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .glassSurface(
-            cornerRadius: AppRadius.xl,
-            tint: Color.ds.surfaceGlass,
-            isInteractive: true
-        )
         .overlay(alignment: .leading) {
             Capsule()
                 .fill(tint)

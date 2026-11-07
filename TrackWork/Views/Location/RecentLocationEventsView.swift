@@ -37,6 +37,8 @@ struct RecentLocationEventsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Location Events")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

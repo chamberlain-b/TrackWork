@@ -18,16 +18,14 @@ struct LocationEventDateResolver {
     }
 
     func affectedDates(for event: LocationEvent, among events: [LocationEvent]) -> Set<Date> {
-        var affectedDates: Set<Date> = [calendar.startOfDay(for: event.occurredAt)]
-
-        guard let visit = LocationVisitResolver().visits(from: events).first(where: {
-            $0.entryEventID == event.id || $0.exitEventID == event.id
-        }) else {
-            return affectedDates
+        // A late/repeated event can replace a pairing on either side of midnight.
+        // Re-evaluate the nearby journal evidence, including the pairing it replaces.
+        let nearbyEvents = events.filter {
+            $0.regionIdentifier == event.regionIdentifier
+                && abs($0.occurredAt.timeIntervalSince(event.occurredAt))
+                    <= LocationVisitResolver.maximumVisitDuration
         }
-
-        affectedDates.formUnion(dates(from: visit.enteredAt, through: visit.exitedAt))
-        return affectedDates
+        return affectedDates(from: nearbyEvents).union([calendar.startOfDay(for: event.occurredAt)])
     }
 
     private func dates(from periodStart: Date, through periodEnd: Date) -> [Date] {

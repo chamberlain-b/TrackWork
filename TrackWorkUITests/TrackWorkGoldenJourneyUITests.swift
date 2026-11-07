@@ -15,27 +15,30 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
     func testFreshLaunchNavigatesWithoutRequestingLocationPermission() {
         launch(fixture: "fresh")
 
-        XCTAssertTrue(app.navigationBars["Summary"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.navigationBars["TrackWork"].waitForExistence(timeout: 8))
         XCTAssertEqual(app.alerts.count, 0)
-        for tab in ["Summary", "Calendar", "History", "Settings"] {
+        for tab in ["Home", "Calendar", "Insights", "Settings"] {
             XCTAssertTrue(app.workTrackTab(named: tab).exists, "Missing \(tab) tab")
         }
-        XCTAssertFalse(app.workTrackTab(named: "Insights").exists)
+        XCTAssertFalse(app.tabBars.buttons["Records"].exists)
 
         app.workTrackTab(named: "Settings").tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         attachScreenshot(named: "Settings")
 
+        reveal(identifier: "settings.editPolicy").tap()
         reveal(identifier: "settings.workdays").tap()
         XCTAssertTrue(app.navigationBars["Workdays"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.switches["Monday"].exists)
         XCTAssertTrue(app.switches["Friday"].exists)
-        app.navigationBars.buttons["Settings"].tap()
+        app.navigationBars.buttons["Work Policy"].tap()
+        element(identifier: "settings.cancelPolicy").tap()
 
         reveal(identifier: "settings.locations").tap()
 
         XCTAssertTrue(app.navigationBars["Locations"].waitForExistence(timeout: 5))
-        XCTAssertTrue(element(identifier: "locationSetup.quickCheckIn").exists)
+        XCTAssertFalse(element(identifier: "locationSetup.quickCheckIn").exists)
+        XCTAssertTrue(element(identifier: "locationSetup.manualAttendance").exists)
         XCTAssertEqual(app.alerts.count, 0)
 
         app.buttons["locationSetup.home"].tap()
@@ -58,35 +61,27 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         attachScreenshot(named: "Address Search")
     }
 
-    func testSummaryReviewPresentsPrimaryHierarchyAndDetails() {
+    func testTodayReviewPresentsPrimaryHierarchyAndDetails() {
         launch(fixture: "summaryReview")
 
-        XCTAssertTrue(element(identifier: "dashboard.hero").waitForExistence(timeout: 8))
-        attachScreenshot(named: "Summary Top")
-        XCTAssertFalse(element(identifier: "dashboard.atAGlance").exists)
-        XCTAssertFalse(element(identifier: "dashboard.calculation").exists)
-        let confirmedOfficeRate = app.staticTexts["confirmed office rate"]
-        XCTAssertTrue(confirmedOfficeRate.exists)
-        XCTAssertTrue(
-            app.staticTexts.matching(
-                NSPredicate(format: "label CONTAINS %@", "confirmed office day")
-            ).firstMatch.exists,
-            "Expected the Summary to separate confirmed attendance from unresolved days"
-        )
+        app.revealElement("today.status")
+        XCTAssertTrue(element(identifier: "today.status").exists)
+        XCTAssertTrue(element(identifier: "today.remaining").exists)
+        XCTAssertTrue(app.revealElement("today.week").exists)
+        XCTAssertTrue(app.revealElement("today.correct").isHittable)
+        attachScreenshot(named: "Today Top")
 
-        let trends = reveal(identifier: "dashboard.trends")
+        let trends = reveal(identifier: "home.insights")
         XCTAssertTrue(trends.isHittable)
-        attachScreenshot(named: "Summary Trends")
+        attachScreenshot(named: "Today Trends")
         trends.tap()
-        XCTAssertTrue(app.navigationBars["Compliance details"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Summary"].tap()
+        XCTAssertTrue(app.navigationBars["Insights"].waitForExistence(timeout: 5))
+        app.workTrackTab(named: "Home").tap()
 
-        let officePlan = reveal(identifier: "dashboard.officePlan")
-        XCTAssertTrue(officePlan.isHittable)
-        attachScreenshot(named: "Summary Office Plan")
-        officePlan.tap()
-        XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
-        attachScreenshot(named: "Office Plan From Summary")
+        let reviewAction = reveal(identifier: "dashboard.reviewAction")
+        XCTAssertTrue(reviewAction.isHittable)
+        reviewAction.tap()
+        XCTAssertTrue(app.navigationBars["Review Days"].waitForExistence(timeout: 5))
     }
 
     func testCurrentLocationSelectionRequestsPermissionOnlyAfterRationale() {
@@ -146,7 +141,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         attachScreenshot(named: "Review Queue")
     }
 
-    func testCalendarAndHistoryUseMatchingLargeHeaders() {
+    func testCalendarAndRecordsUseMatchingLargeHeaders() {
         launch(fixture: "populated")
 
         app.workTrackTab(named: "Calendar").tap()
@@ -155,10 +150,10 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         XCTAssertTrue(waitUntil(timeout: 3) { self.app.workTrackTab(named: "Settings").isHittable })
         attachScreenshot(named: "Calendar")
 
-        app.workTrackTab(named: "History").tap()
-        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        app.openRecords()
+        XCTAssertTrue(app.navigationBars["Records"].waitForExistence(timeout: 5))
         XCTAssertTrue(waitUntil(timeout: 3) { self.app.workTrackTab(named: "Settings").isHittable })
-        attachScreenshot(named: "History")
+        attachScreenshot(named: "Records")
     }
 
     func testManualOverrideAndNotePersistFromCalendar() {
@@ -175,7 +170,7 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         XCTAssertTrue(day.waitForExistence(timeout: 5))
         XCTAssertTrue(day.valueText.localizedCaseInsensitiveContains("Office"), day.valueText)
 
-        day.tap()
+        openCalendarDay()
         XCTAssertTrue(element(identifier: "dayDetail.note").waitForExistence(timeout: 5))
         XCTAssertTrue(element(identifier: "dayDetail.note").valueText.contains("Entered through reception"))
     }
@@ -196,7 +191,10 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         launch(fixture: "fresh")
         openCalendarDay()
 
-        element(identifier: "dayDetail.customExcluded").tap()
+        let exclusion = element(identifier: "dayDetail.customExcluded")
+        // Native Form switches expose the label row and the trailing switch together.
+        exclusion.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertTrue(waitUntil(timeout: 3) { exclusion.valueText == "1" })
         let reason = textElement(identifier: "dayDetail.customExclusionReason")
         XCTAssertTrue(reason.waitForExistence(timeout: 3))
         reason.tap()
@@ -211,8 +209,8 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
     func testCSVAndPDFExportsCompleteWithoutSharingSensitiveRawData() {
         launch(fixture: "populated")
 
-        app.workTrackTab(named: "History").tap()
-        XCTAssertTrue(app.navigationBars["History"].waitForExistence(timeout: 5))
+        app.openRecords()
+        XCTAssertTrue(app.navigationBars["Records"].waitForExistence(timeout: 5))
         element(identifier: "history.export").tap()
         XCTAssertTrue(app.navigationBars["Export"].waitForExistence(timeout: 5))
         attachScreenshot(named: "Export")
@@ -247,7 +245,10 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         app.workTrackTab(named: "Calendar").tap()
         let resetDay = calendarDayElement()
         XCTAssertTrue(resetDay.waitForExistence(timeout: 5))
-        XCTAssertTrue(resetDay.valueText.localizedCaseInsensitiveContains("Needs review"), resetDay.valueText)
+        XCTAssertTrue(
+            resetDay.valueText.localizedCaseInsensitiveContains("Upcoming workday"),
+            resetDay.valueText
+        )
     }
 
     private func launch(fixture: String) {
@@ -261,6 +262,9 @@ final class TrackWorkGoldenJourneyUITests: XCTestCase {
         let day = calendarDayElement()
         XCTAssertTrue(day.waitForExistence(timeout: 5), "Calendar day \(calendarDayIdentifier) did not appear")
         day.tap()
+        let edit = element(identifier: "calendar.selectedDay.edit")
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
         XCTAssertTrue(element(identifier: "dayDetail.save").waitForExistence(timeout: 5))
     }
 

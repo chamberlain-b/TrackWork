@@ -44,7 +44,7 @@ struct ComplianceResultsSection: View {
                         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                             Text(primaryValue)
                                 .font(AppTypography.heroMetric.monospacedDigit())
-                                .foregroundStyle(Color.ds.textPrimary)
+                                .foregroundStyle(Color.ds.accentPrimary)
 
                             Text(primaryLabel)
                                 .font(AppTypography.callout)
@@ -155,7 +155,7 @@ struct ComplianceResultsSection: View {
 
             Text(value)
                 .font(AppTypography.smallMetric.monospacedDigit())
-                .foregroundStyle(Color.ds.textPrimary)
+                .foregroundStyle(Color.ds.accentPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(subtitle)

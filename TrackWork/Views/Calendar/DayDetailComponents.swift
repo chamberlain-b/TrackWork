@@ -50,69 +50,124 @@ enum LeaveSelection: String, CaseIterable, Identifiable {
     }
 }
 
-struct DayDetailHeaderCard: View {
-    let date: Date
+struct DayDetailStatusFields: View {
+    @Binding var selectedStatus: AttendanceClassification
+    @Binding var selectedReason: OverrideReason
+
+    let isStatusLocked: Bool
+    let finalStatus: AttendanceClassification
+    let requiresOverrideReason: Bool
+
+    var body: some View {
+        Picker("Status", selection: $selectedStatus) {
+            ForEach(DayDetailStatusOptions.editable) { status in
+                Text(status.displayName)
+                    .tag(status)
+            }
+        }
+        .pickerStyle(.menu)
+        .disabled(isStatusLocked)
+        .accessibilityIdentifier("dayDetail.manualStatus")
+
+        if isStatusLocked {
+            Label(
+                "\(finalStatus.displayName) is used for this day.",
+                systemImage: "info.circle"
+            )
+            .font(AppTypography.callout)
+            .foregroundStyle(Color.ds.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        if requiresOverrideReason {
+            Picker("Override reason", selection: $selectedReason) {
+                ForEach(OverrideReason.allCases) { reason in
+                    Text(reason.displayName)
+                        .tag(reason)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("dayDetail.overrideReason")
+        }
+    }
+}
+
+struct DayDetailLeaveFields: View {
+    @Binding var selectedLeave: LeaveSelection
+
+    var body: some View {
+        Picker("Full-day leave", selection: $selectedLeave) {
+            ForEach(LeaveSelection.allCases) { selection in
+                Text(selection.displayName)
+                    .tag(selection)
+            }
+        }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("dayDetail.leaveType")
+    }
+}
+
+struct DayDetailExclusionFields: View {
+    @Binding var isExcluded: Bool
+    @Binding var reason: String
+
+    var body: some View {
+        Toggle("Exclude from requirement", isOn: $isExcluded)
+            .tint(Color.ds.accentPrimary)
+            .accessibilityIdentifier("dayDetail.customExcluded")
+
+        if isExcluded {
+            TextField("Reason (optional)", text: $reason, axis: .vertical)
+                .lineLimit(2...4)
+                .accessibilityIdentifier("dayDetail.customExclusionReason")
+        }
+    }
+}
+
+struct DayDetailNoteField: View {
+    @Binding var note: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            Text("Note")
+                .font(AppTypography.body)
+                .foregroundStyle(Color.ds.textPrimary)
+
+            TextEditor(text: $note)
+                .frame(minHeight: 80)
+                .accessibilityLabel("Attendance note")
+                .accessibilityIdentifier("dayDetail.note")
+
+            Text("Notes do not change attendance status.")
+                .font(AppTypography.caption)
+                .foregroundStyle(Color.ds.textSecondary)
+        }
+    }
+}
+
+struct DayDetailStatusDetails: View {
     let detectedStatus: AttendanceClassification
     let finalStatus: AttendanceClassification
     let isUpcoming: Bool
     let complianceTreatment: ComplianceTreatment
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                HStack(alignment: .top, spacing: AppSpacing.md) {
-                    dateTitle
-                    Spacer(minLength: AppSpacing.sm)
-                    statusPill
-                }
-
-                Divider()
-                    .overlay(Color.ds.separator)
-
-                if isUpcoming {
-                    Label(
-                        "Confirm attendance on or after this date.",
-                        systemImage: "calendar.badge.clock"
-                    )
-                    .font(AppTypography.callout)
-                    .foregroundStyle(Color.ds.textSecondary)
-                } else {
-                    statusRows
-                }
-            }
-        }
-    }
-
-    private var dateTitle: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            Text(date.formatted(.dateTime.weekday(.wide)))
-                .font(AppTypography.captionStrong)
-                .foregroundStyle(Color.ds.textSecondary)
-
-            Text(date.formatted(.dateTime.day().month(.wide).year()))
-                .font(AppTypography.title)
-                .foregroundStyle(Color.ds.textPrimary)
-                .lineLimit(2)
-        }
-    }
-
-    private var statusPill: some View {
-        DSStatusPill(
-            text: isUpcoming ? "Upcoming" : finalStatus.displayName,
-            systemImage: isUpcoming ? "calendar" : "checkmark.circle.fill",
-            style: isUpcoming ? .neutral : statusPillStyle
-        )
-    }
-
-    private var statusRows: some View {
-        VStack(spacing: AppSpacing.sm) {
+        if isUpcoming {
+            Label(
+                "Confirm attendance on or after this date.",
+                systemImage: "calendar.badge.clock"
+            )
+            .font(AppTypography.callout)
+            .foregroundStyle(Color.ds.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
             DetailInfoRow(
-                title: "Detected",
+                title: "Detected status",
                 value: detectedStatus.displayName,
                 color: detectedStatus.calendarBadgeForegroundColor
             )
             DetailInfoRow(
-                title: "Final",
+                title: "Final status",
                 value: finalStatus.displayName,
                 color: finalStatus.calendarBadgeForegroundColor
             )
@@ -123,110 +178,26 @@ struct DayDetailHeaderCard: View {
             )
         }
     }
-
-    private var statusPillStyle: DSStatusPillStyle {
-        switch finalStatus {
-        case .office:
-            .success
-        case .mixed, .unknown:
-            .warning
-        case .home, .annualLeave, .sickLeave, .publicHoliday, .weekend, .nonWorkingDay:
-            .neutral
-        }
-    }
 }
 
-struct DayDetailManualStatusCard: View {
-    @Binding var selectedStatus: AttendanceClassification
-    @Binding var selectedReason: OverrideReason
-
-    let isLeaveSelected: Bool
-    let requiresOverrideReason: Bool
+struct DayDetailEligibilityDetails: View {
+    let title: String
+    let impact: String
+    let explanation: String
+    let color: Color
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("Manual status")
-                    .font(AppTypography.cardTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                LabeledContent("Final status") {
-                    Picker("Final status", selection: $selectedStatus) {
-                        ForEach(DayDetailStatusOptions.editable) { status in
-                            Text(status.displayName)
-                                .tag(status)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .accessibilityIdentifier("dayDetail.manualStatus")
-                }
-                .disabled(isLeaveSelected)
-
-                if requiresOverrideReason {
-                    Picker("Override reason", selection: $selectedReason) {
-                        ForEach(OverrideReason.allCases) { reason in
-                            Text(reason.displayName)
-                                .tag(reason)
-                        }
-                    }
-                    .accessibilityIdentifier("dayDetail.overrideReason")
-                }
-            }
+        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+            DetailInfoRow(title: title, value: impact, color: color)
+            Text(explanation)
+                .font(AppTypography.caption)
+                .foregroundStyle(Color.ds.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-struct DayDetailLeaveCard: View {
-    @Binding var selectedLeave: LeaveSelection
-
-    let eligibleDayImpactText: String
-    let eligibleDayImpactReason: String
-    let leaveReducesEligibleDay: Bool
-
-    var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("Leave")
-                    .font(AppTypography.cardTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                LabeledContent("Type") {
-                    Picker("Full-day leave", selection: $selectedLeave) {
-                        ForEach(LeaveSelection.allCases) { selection in
-                            Text(selection.displayName)
-                                .tag(selection)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .accessibilityIdentifier("dayDetail.leaveType")
-                }
-
-                if selectedLeave.leaveType != nil {
-                    DetailInfoRow(
-                        title: "Duration",
-                        value: LeaveDuration.fullDay.displayName,
-                        color: Color.ds.leaveDay
-                    )
-                }
-
-                DetailInfoRow(
-                    title: "Eligible impact",
-                    value: eligibleDayImpactText,
-                    color: leaveReducesEligibleDay ? Color.ds.leaveDay : Color.ds.textTertiary
-                )
-
-                Text(eligibleDayImpactReason)
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-}
-
-struct DayDetailHolidayCard: View {
+struct DayDetailHolidayDetails: View {
     let holiday: PublicHoliday
 
     private var sourceURL: URL? {
@@ -241,133 +212,41 @@ struct DayDetailHolidayCard: View {
     }
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Label("Public holiday", systemImage: "sparkles")
-                    .font(AppTypography.cardTitle)
-                    .foregroundStyle(Color.ds.publicHoliday)
+        DetailInfoRow(
+            title: "Holiday source",
+            value: holiday.sourceName,
+            color: Color.ds.textSecondary
+        )
 
-                Text(holiday.name)
-                    .font(AppTypography.body.weight(.semibold))
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                DetailInfoRow(
-                    title: "Source",
-                    value: holiday.sourceName,
-                    color: Color.ds.textSecondary
-                )
-
-                if let sourceURL {
-                    Link(destination: sourceURL) {
-                        Label("Official source", systemImage: "arrow.up.right.square")
-                            .font(AppTypography.callout.weight(.semibold))
-                    }
-                    .accessibilityIdentifier("dayDetail.publicHolidaySource")
-                }
+        if let sourceURL {
+            Link(destination: sourceURL) {
+                Label("Official source", systemImage: "arrow.up.right.square")
             }
-        }
-        .accessibilityIdentifier("dayDetail.publicHoliday")
-    }
-}
-
-struct DayDetailCustomExclusionCard: View {
-    @Binding var isExcluded: Bool
-    @Binding var reason: String
-
-    let eligibleDayImpactText: String
-    let eligibleDayImpactReason: String
-    let reducesEligibleDay: Bool
-
-    var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Toggle("Exclude from compliance requirement", isOn: $isExcluded)
-                    .font(AppTypography.cardTitle)
-                    .tint(Color.ds.accentPrimary)
-                    .accessibilityIdentifier("dayDetail.customExcluded")
-
-                if isExcluded {
-                    TextField("Reason (optional)", text: $reason, axis: .vertical)
-                        .lineLimit(2...4)
-                        .accessibilityIdentifier("dayDetail.customExclusionReason")
-
-                    DetailInfoRow(
-                        title: "Eligible impact",
-                        value: eligibleDayImpactText,
-                        color: reducesEligibleDay ? Color.ds.textSecondary : Color.ds.textTertiary
-                    )
-
-                    Text(eligibleDayImpactReason)
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("Remove this day from the office target.")
-                        .font(AppTypography.caption)
-                        .foregroundStyle(Color.ds.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            .accessibilityIdentifier("dayDetail.publicHolidaySource")
         }
     }
 }
 
-struct DayDetailAttendanceCard: View {
+struct DayDetailAttendanceDetails: View {
     let attendanceDay: AttendanceDay
 
     var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("Attendance")
-                    .font(AppTypography.cardTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                DetailInfoRow(
-                    title: "Office minutes",
-                    value: attendanceDay.officeMinutes.formatted(),
-                    color: Color.ds.officeDay
-                )
-                DetailInfoRow(
-                    title: "Home minutes",
-                    value: attendanceDay.homeMinutes.formatted(),
-                    color: Color.ds.homeDay
-                )
-                DetailInfoRow(
-                    title: "Compliance",
-                    value: attendanceDay.complianceTreatment?.displayName
-                        ?? ComplianceTreatment.requiresReview.displayName,
-                    color: Color.ds.info
-                )
-            }
-        }
-    }
-}
-
-struct DayDetailNoteCard: View {
-    @Binding var note: String
-
-    var body: some View {
-        DSCard(includesShadow: false) {
-            VStack(alignment: .leading, spacing: AppSpacing.md) {
-                Text("Note")
-                    .font(AppTypography.cardTitle)
-                    .foregroundStyle(Color.ds.textPrimary)
-
-                TextEditor(text: $note)
-                    .frame(minHeight: 120)
-                    .padding(AppSpacing.xs)
-                    .background(
-                        Color.ds.surfaceSecondary.opacity(0.62),
-                        in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)
-                    )
-                    .accessibilityLabel("Attendance note")
-                    .accessibilityIdentifier("dayDetail.note")
-
-                Text("Notes do not change attendance status.")
-                    .font(AppTypography.caption)
-                    .foregroundStyle(Color.ds.textSecondary)
-            }
-        }
+        DetailInfoRow(
+            title: "Office minutes",
+            value: attendanceDay.officeMinutes.formatted(),
+            color: Color.ds.officeDay
+        )
+        DetailInfoRow(
+            title: "Home minutes",
+            value: attendanceDay.homeMinutes.formatted(),
+            color: Color.ds.homeDay
+        )
+        DetailInfoRow(
+            title: "Saved treatment",
+            value: attendanceDay.complianceTreatment?.displayName
+                ?? ComplianceTreatment.requiresReview.displayName,
+            color: Color.ds.textSecondary
+        )
     }
 }
 
@@ -377,18 +256,33 @@ private struct DetailInfoRow: View {
     let color: Color
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-            Text(title)
-                .font(AppTypography.callout)
-                .foregroundStyle(Color.ds.textSecondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
+                rowTitle
+                Spacer(minLength: AppSpacing.sm)
+                rowValue
+                    .multilineTextAlignment(.trailing)
+            }
 
-            Spacer(minLength: AppSpacing.sm)
-
-            Text(value)
-                .font(AppTypography.callout.weight(.semibold))
-                .foregroundStyle(color)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                rowTitle
+                rowValue
+            }
         }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var rowTitle: some View {
+        Text(title)
+            .font(AppTypography.callout)
+            .foregroundStyle(Color.ds.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var rowValue: some View {
+        Text(value)
+            .font(AppTypography.callout.weight(.semibold))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -1,10 +1,13 @@
 import SwiftUI
 
+enum DSMetricPresentation { case grouped, borderless }
+
 struct DSMetricTile: View {
     let systemImage: String
     let label: String
     let value: String
     var subtitle: String?
+    var presentation: DSMetricPresentation = .borderless
     var statusColor: Color = Color.ds.accentPrimary
 
     var body: some View {
@@ -39,13 +42,13 @@ struct DSMetricTile: View {
                 }
             }
         }
-        .padding(AppSpacing.md)
+        .padding(presentation == .grouped ? AppSpacing.md : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.ds.surfaceSecondary.opacity(0.78))
+        .background(presentation == .grouped ? Color.ds.surfaceSecondary : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.lg, style: .continuous)
-                .stroke(Color.ds.borderSubtle.opacity(0.62), lineWidth: 1)
+                .stroke(presentation == .grouped ? Color.ds.separator.opacity(0.4) : Color.clear, lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(label))

@@ -15,13 +15,13 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
     func testPlanningAndCheckInUseContextualNavigationActions() {
         launchPopulatedFixture()
 
-        let checkIn = element(identifier: "dashboard.quickCheckIn")
+        let checkIn = reveal(identifier: "today.checkLocation")
         XCTAssertTrue(checkIn.waitForExistence(timeout: 5))
         XCTAssertTrue(checkIn.isHittable)
-        attachScreenshot(named: "Summary Contextual Check In")
+        attachScreenshot(named: "Today Contextual Check In")
         checkIn.tap()
         XCTAssertTrue(app.navigationBars["Check In"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Summary"].tap()
+        app.navigationBars.buttons["TrackWork"].tap()
 
         app.workTrackTab(named: "Calendar").tap()
         let actions = element(identifier: "calendar.actions")
@@ -66,13 +66,13 @@ final class TrackWorkActionPlacementUITests: XCTestCase {
     private func reveal(identifier: String, maxSwipes: Int = 8) -> XCUIElement {
         let target = element(identifier: identifier)
         for _ in 0...maxSwipes {
-            if target.exists {
+            if target.exists && target.isHittable {
                 return target
             }
             app.swipeUp()
         }
         for _ in 0...maxSwipes {
-            if target.exists {
+            if target.exists && target.isHittable {
                 return target
             }
             app.swipeDown()

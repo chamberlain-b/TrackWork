@@ -29,7 +29,7 @@ enum DSIconBadgeStyle: CaseIterable {
 struct DSIconBadge: View {
     let systemImage: String
     var style: DSIconBadgeStyle = .accent
-    var size: CGFloat = 52
+    var size: CGFloat = 32
 
     var body: some View {
         Image(systemName: systemImage)

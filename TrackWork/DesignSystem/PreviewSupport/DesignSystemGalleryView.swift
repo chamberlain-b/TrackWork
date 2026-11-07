@@ -4,9 +4,9 @@ struct DesignSystemGalleryView: View {
     @State private var selectedTab = "dashboard"
 
     private let galleryTabs = [
-        DSTabItem(id: "dashboard", title: "Today", systemImage: "house.fill"),
-        DSTabItem(id: "calendar", title: "Calendar", systemImage: "calendar"),
-        DSTabItem(id: "export", title: "Export", systemImage: "square.and.arrow.up"),
+        DSTabItem(id: "dashboard", title: "Home", systemImage: "house.fill"),
+        DSTabItem(id: "calendar", title: "Log", systemImage: "calendar"),
+        DSTabItem(id: "export", title: "Insights", systemImage: "chart.bar.xaxis"),
         DSTabItem(id: "settings", title: "Settings", systemImage: "gearshape.fill")
     ]
 
@@ -96,6 +96,14 @@ struct DesignSystemGalleryView: View {
                     }
                 }
 
+                gallerySection("Editorial metrics") {
+                    DSMetricStrip(metrics: [.init(label: "Office days attended", value: "12"),
+                                            .init(label: "Office days required", value: "20"),
+                                            .init(label: "Office share", value: "60%")])
+                    DSAttendanceMix(mix: AttendanceMix(officeDays: 12, homeDays: 6))
+                    DSAttendanceMix(mix: AttendanceMix(officeDays: 12, homeDays: 6), usesDonut: true)
+                }
+
                 gallerySection("Buttons") {
                     VStack(spacing: AppSpacing.sm) {
                         DSButton(title: "Primary Action", systemImage: "checkmark", variant: .primary, action: {})
@@ -133,7 +141,14 @@ struct DesignSystemGalleryView: View {
                 }
 
                 gallerySection("Tab Bar") {
-                    DSTabBar(items: galleryTabs, selection: $selectedTab)
+                    TabView(selection: $selectedTab) {
+                        ForEach(galleryTabs) { item in
+                            Tab(item.title, systemImage: item.systemImage, value: item.id) {
+                                Text(item.title).appScreenBackground()
+                            }
+                        }
+                    }
+                    .frame(height: 180)
                 }
 
                 gallerySection("Empty State") {
@@ -198,4 +213,9 @@ private struct FlowLayout<Content: View>: View {
 #Preview("Large Text") {
     DesignSystemGalleryView()
         .environment(\.sizeCategory, .accessibilityLarge)
+}
+
+#Preview("Maximum text") {
+    DesignSystemGalleryView()
+        .dynamicTypeSize(.accessibility5)
 }

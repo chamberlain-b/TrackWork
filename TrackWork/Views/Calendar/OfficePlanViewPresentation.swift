@@ -42,7 +42,7 @@ extension OfficePlanView {
                     .font(.caption.weight(.semibold))
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(Color.ds.accentPrimary)
+            .foregroundStyle(Color.ds.interactionPrimary)
             .padding(.horizontal, AppSpacing.md)
             .frame(minHeight: 44)
             .background(
@@ -61,24 +61,26 @@ extension OfficePlanView {
     }
 
     var planSurface: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            planHeader
+        let data = planData
+
+        return VStack(alignment: .leading, spacing: 0) {
+            planHeader(data)
                 .padding(.horizontal, AppSpacing.md)
                 .padding(.vertical, AppSpacing.sm)
 
             Divider()
 
             if usesAccessibilityAgenda {
-                planActions
+                planActions(data)
                     .padding(AppSpacing.md)
 
                 Divider()
             }
 
-            ForEach(Array(calendarWeeks.enumerated()), id: \.element.id) { index, week in
-                weekSection(week, index: index + 1)
+            ForEach(Array(data.calendarWeeks.enumerated()), id: \.element.id) { index, week in
+                weekSection(week, index: index + 1, data: data)
 
-                if week.id != calendarWeeks.last?.id {
+                if week.id != data.calendarWeeks.last?.id {
                     Divider()
                 }
             }
@@ -86,77 +88,65 @@ extension OfficePlanView {
             if !usesAccessibilityAgenda {
                 Divider()
 
-                planActions
+                planActions(data)
                     .padding(AppSpacing.md)
             }
         }
-        .background(.regularMaterial)
-        .background(Color.ds.surfacePrimary.opacity(0.74))
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
-                .strokeBorder(Color.ds.borderSubtle.opacity(0.72), lineWidth: 0.8)
-        }
-        .shadow(
-            color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity * 0.55),
-            radius: AppShadow.cardRadius * 0.75,
-            x: 0,
-            y: AppShadow.cardY * 0.7
-        )
+        .cardSurface()
     }
 
-    var planHeader: some View {
+    func planHeader(_ data: OfficePlanViewDataSnapshot) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: AppSpacing.sm) {
-                    monthHeading
+                    monthHeading(data)
                     Spacer(minLength: AppSpacing.xs)
-                    planStatus
+                    planStatus(data)
                 }
 
                 VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                    monthHeading
-                    planStatus
+                    monthHeading(data)
+                    planStatus(data)
                 }
             }
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
-                        plannedProgressLabel
+                        plannedProgressLabel(data)
                         Spacer(minLength: AppSpacing.xs)
-                        additionalPlansLabel
+                        additionalPlansLabel(data)
                     }
 
                     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                        plannedProgressLabel
-                        additionalPlansLabel
+                        plannedProgressLabel(data)
+                        additionalPlansLabel(data)
                     }
                 }
 
                 ProgressView(
-                    value: planProgressValue,
-                    total: planProgressTotal
+                    value: planProgressValue(data),
+                    total: planProgressTotal(data)
                 )
-                .tint(planAccentColor)
+                .tint(planAccentColor(data))
                 .background(Color.ds.accentMuted.opacity(0.2), in: Capsule())
                 .scaleEffect(x: 1, y: 1.4, anchor: .center)
                 .accessibilityLabel("Office plan progress")
-                .accessibilityValue(progressAccessibilityValue)
+                .accessibilityValue(progressAccessibilityValue(data))
                 .accessibilityIdentifier("officePlan.progress")
             }
 
             OfficePlanLegend()
 
-            if summary.reviewRequiredDays > 0 {
-                Label(reviewRequiredMessage, systemImage: "exclamationmark.triangle.fill")
+            if data.summary.reviewRequiredDays > 0 {
+                Label(reviewRequiredMessage(data), systemImage: "exclamationmark.triangle.fill")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if remainingOfficeDays > candidateDates.count {
-                Label(unreachableTargetMessage, systemImage: "exclamationmark.triangle.fill")
+            if data.remainingOfficeDays > data.candidateDates.count {
+                Label(unreachableTargetMessage(data), systemImage: "exclamationmark.triangle.fill")
                     .font(AppTypography.caption)
                     .foregroundStyle(Color.ds.critical)
                     .fixedSize(horizontal: false, vertical: true)
@@ -164,56 +154,60 @@ extension OfficePlanView {
         }
     }
 
-    var monthHeading: some View {
+    func monthHeading(_ data: OfficePlanViewDataSnapshot) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            Text("\(monthTitle) plan")
+            Text("\(monthTitle(data)) plan")
                 .font(AppTypography.cardTitle)
                 .foregroundStyle(Color.ds.textPrimary)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("officePlan.monthTitle")
 
-            Text("Target: \(summary.requiredOfficeDays) office days")
+            Text("Target: \(data.summary.requiredOfficeDays) office days")
                 .font(AppTypography.callout)
                 .foregroundStyle(Color.ds.textSecondary)
         }
     }
 
-    var planStatus: some View {
+    func planStatus(_ data: OfficePlanViewDataSnapshot) -> some View {
         DSStatusPill(
-            text: planStatusText,
-            systemImage: planStatusSystemImage,
-            style: planStatusStyle
+            text: planStatusText(data),
+            systemImage: planStatusSystemImage(data),
+            style: planStatusStyle(data)
         )
         .accessibilityIdentifier("officePlan.status")
     }
 
-    var plannedProgressLabel: some View {
-        Text(progressLabelText)
+    func plannedProgressLabel(_ data: OfficePlanViewDataSnapshot) -> some View {
+        Text(progressLabelText(data))
             .font(AppTypography.callout)
             .foregroundStyle(Color.ds.textSecondary)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Office days planned")
-            .accessibilityValue(plannedCandidateDays.formatted())
+            .accessibilityValue(data.plannedCandidateDays.formatted())
             .accessibilityIdentifier("officePlan.planned")
     }
 
-    var additionalPlansLabel: some View {
-        Text(additionalPlansText)
+    func additionalPlansLabel(_ data: OfficePlanViewDataSnapshot) -> some View {
+        Text(additionalPlansText(data))
             .font(AppTypography.callout)
             .foregroundStyle(Color.ds.textSecondary)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Additional office days needed")
-            .accessibilityValue(additionalPlansNeeded.formatted())
+            .accessibilityValue(data.additionalPlansNeeded.formatted())
             .accessibilityIdentifier("officePlan.needed")
     }
 
-    func weekSection(_ week: OfficePlanWeek, index: Int) -> some View {
+    func weekSection(
+        _ week: OfficePlanWeek,
+        index: Int,
+        data: OfficePlanViewDataSnapshot
+    ) -> some View {
         let isCollapsed = isWeekCollapsed(week)
         return VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-            weekHeader(week, index: index, isCollapsed: isCollapsed)
+            weekHeader(week, index: index, isCollapsed: isCollapsed, data: data)
 
             if !isCollapsed {
-                weekContent(week)
+                weekContent(week, data: data)
             }
         }
         .padding(.horizontal, AppSpacing.md)
@@ -223,7 +217,8 @@ extension OfficePlanView {
     func weekHeader(
         _ week: OfficePlanWeek,
         index: Int,
-        isCollapsed: Bool
+        isCollapsed: Bool,
+        data: OfficePlanViewDataSnapshot
     ) -> some View {
         Button {
             toggleWeek(week)
@@ -235,7 +230,7 @@ extension OfficePlanView {
 
                 Spacer(minLength: AppSpacing.xs)
 
-                Text(weekPlanText(week))
+                Text(weekPlanText(week, in: data))
                     .font(AppTypography.callout.monospacedDigit())
                     .foregroundStyle(Color.ds.textSecondary)
 
@@ -250,7 +245,7 @@ extension OfficePlanView {
         .buttonStyle(.plain)
         .accessibilityLabel("Week \(index), \(weekRangeAccessibilityText(week))")
         .accessibilityValue(
-            "\(weekPlanText(week)), \(isCollapsed ? "Collapsed" : "Expanded")"
+            "\(weekPlanText(week, in: data)), \(isCollapsed ? "Collapsed" : "Expanded")"
         )
         .accessibilityHint(isCollapsed ? "Expands this week" : "Collapses this week")
         .accessibilityIdentifier(
@@ -261,62 +256,62 @@ extension OfficePlanView {
     }
 
     @ViewBuilder
-    func weekContent(_ week: OfficePlanWeek) -> some View {
+    func weekContent(_ week: OfficePlanWeek, data: OfficePlanViewDataSnapshot) -> some View {
         if usesAccessibilityAgenda {
-            weekAgenda(week)
+            weekAgenda(week, data: data)
         } else {
             ViewThatFits(in: .horizontal) {
-                weekGrid(week)
-                weekAgenda(week)
+                weekGrid(week, data: data)
+                weekAgenda(week, data: data)
             }
         }
     }
 
-    func weekGrid(_ week: OfficePlanWeek) -> some View {
+    func weekGrid(_ week: OfficePlanWeek, data: OfficePlanViewDataSnapshot) -> some View {
         HStack(spacing: 2) {
             ForEach(week.dates, id: \.self) { date in
                 OfficePlanDayCell(
                     date: date,
-                    state: dateState(for: date),
+                    state: dateState(for: date, in: data),
                     isToday: calendar.isDate(date, inSameDayAs: referenceDate),
                     accessibilityIdentifier: dayIdentifier(for: date),
-                    action: dayAction(for: date)
+                    action: dayAction(for: date, in: data)
                 )
                 .frame(minWidth: 44)
             }
         }
     }
 
-    func weekAgenda(_ week: OfficePlanWeek) -> some View {
+    func weekAgenda(_ week: OfficePlanWeek, data: OfficePlanViewDataSnapshot) -> some View {
         VStack(spacing: AppSpacing.xxs) {
-            ForEach(week.dates.filter(isInDisplayedMonth), id: \.self) { date in
+            ForEach(week.dates.filter { isInDisplayedMonth($0, in: data) }, id: \.self) { date in
                 OfficePlanAgendaDayRow(
                     date: date,
-                    state: dateState(for: date),
+                    state: dateState(for: date, in: data),
                     accessibilityIdentifier: dayIdentifier(for: date),
-                    action: dayAction(for: date)
+                    action: dayAction(for: date, in: data)
                 )
             }
         }
     }
 
-    var planActions: some View {
+    func planActions(_ data: OfficePlanViewDataSnapshot) -> some View {
         VStack(spacing: AppSpacing.sm) {
             DSButton(
-                title: suggestButtonTitle,
+                title: suggestButtonTitle(data),
                 systemImage: "wand.and.stars",
                 action: suggestPlan
             )
             .disabled(
-                additionalPlansNeeded == 0 ||
-                    unselectedCandidateDates.isEmpty
+                data.additionalPlansNeeded == 0 ||
+                    data.unselectedCandidateDates.isEmpty
             )
             .accessibilityIdentifier("officePlan.suggest")
 
-            if !invalidSelectedDates.isEmpty {
+            if !data.invalidSelectedDates.isEmpty {
                 Button(action: requestUnavailablePlanRemoval) {
                     Label(
-                        removeUnavailablePlansTitle,
+                        removeUnavailablePlansTitle(data),
                         systemImage: "calendar.badge.minus"
                     )
                     .font(AppTypography.headline)
@@ -334,8 +329,8 @@ extension OfficePlanView {
                     .frame(minHeight: 44)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.ds.accentPrimary)
-            .disabled(remainingOfficeDays == 0 || candidateDates.isEmpty)
+            .foregroundStyle(Color.ds.interactionPrimary)
+            .disabled(data.remainingOfficeDays == 0 || data.candidateDates.isEmpty)
             .accessibilityHint("Replaces this month’s reminders after confirmation")
             .accessibilityIdentifier("officePlan.replan")
 

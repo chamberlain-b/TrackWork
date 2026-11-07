@@ -30,7 +30,7 @@ struct UpcomingOfficePlanSection: View {
                     HStack(alignment: .center, spacing: AppSpacing.md) {
                         Image(systemName: plannedDates.isEmpty ? "calendar.badge.plus" : "building.2.fill")
                             .font(.title3.weight(.semibold))
-                            .foregroundStyle(Color.ds.accentPrimary)
+                            .foregroundStyle(Color.ds.interactionPrimary)
                             .frame(width: 44, height: 44)
                             .background(Color.ds.accentPrimary.opacity(0.1), in: Circle())
                             .accessibilityHidden(true)
@@ -162,7 +162,7 @@ struct RecentTrendCard: View {
                     x: .value("Period", point.label),
                     y: .value("Office days", point.completedOfficeDays)
                 )
-                .foregroundStyle(Color.ds.accentPrimary.gradient)
+                .foregroundStyle(Color.ds.officeDay)
                 .accessibilityLabel("\(periodAccessibilityName) \(point.label)")
                 .accessibilityValue(
                     "\(officeDayDescription(point.completedOfficeDays)); "
@@ -174,7 +174,7 @@ struct RecentTrendCard: View {
                 x: .value("Period", point.label),
                 y: .value("Target", point.requiredOfficeDays)
             )
-            .foregroundStyle(Color.ds.textSecondary)
+            .foregroundStyle(Color.ds.requiredTarget)
             .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
             .symbol(.circle)
             .accessibilityLabel("\(periodAccessibilityName) \(point.label)")
@@ -206,7 +206,7 @@ struct RecentTrendCard: View {
         HStack(spacing: AppSpacing.lg) {
             HStack(spacing: AppSpacing.xs) {
                 Image(systemName: "chart.bar.fill")
-                    .foregroundStyle(Color.ds.accentPrimary)
+                    .foregroundStyle(Color.ds.officeDay)
                 Text("Office days")
                     .foregroundStyle(Color.ds.textSecondary)
             }
@@ -215,7 +215,7 @@ struct RecentTrendCard: View {
                 Image(systemName: "line.diagonal")
                 Text("Target")
             }
-            .foregroundStyle(Color.ds.textSecondary)
+            .foregroundStyle(Color.ds.requiredTarget)
         }
         .font(AppTypography.captionStrong)
         .accessibilityHidden(true)

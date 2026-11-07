@@ -4,8 +4,7 @@ struct DashboardPlanConfidenceCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let confidence: OfficePlanConfidence
-    let displayedMonth: Date
-    let referenceDate: Date
+    let onPrimaryAction: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -40,18 +39,7 @@ struct DashboardPlanConfidenceCard: View {
             primaryAction
         }
         .padding(AppSpacing.md)
-        .background(.regularMaterial)
-        .background(Color.ds.surfaceBlueTint.opacity(0.58))
-        .clipShape(cardShape)
-        .overlay {
-            cardShape.strokeBorder(Color.ds.borderSubtle.opacity(0.65), lineWidth: 0.8)
-        }
-        .shadow(
-            color: Color.ds.shadowTint.opacity(AppShadow.cardOpacity * 0.65),
-            radius: AppShadow.cardRadius * 0.8,
-            x: 0,
-            y: AppShadow.cardY * 0.7
-        )
+        .heroCardSurface()
     }
 }
 
@@ -142,7 +130,7 @@ private extension DashboardPlanConfidenceCard {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 Text(confidence.completedOfficeDays, format: .number)
                     .font(AppTypography.metric.monospacedDigit())
-                    .foregroundStyle(Color.ds.accentPrimary)
+                    .foregroundStyle(Color.ds.interactionPrimary)
 
                 Text("of \(confidence.requiredOfficeDays)")
                     .font(AppTypography.headline.monospacedDigit())
@@ -167,7 +155,7 @@ private extension DashboardPlanConfidenceCard {
             HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xs) {
                 Text(confidence.remainingOfficeDays, format: .number)
                     .font(AppTypography.metric.monospacedDigit())
-                    .foregroundStyle(Color.ds.accentPrimary)
+                    .foregroundStyle(Color.ds.interactionPrimary)
 
                 Text("still needed")
                     .font(AppTypography.headline)
@@ -187,7 +175,7 @@ private extension DashboardPlanConfidenceCard {
 
     private var confirmedProgress: some View {
         ProgressView(value: confidence.confirmedProgress)
-            .tint(stateColor)
+            .tint(Color.ds.officeDay)
             .background(Color.ds.accentMuted.opacity(0.22), in: Capsule())
             .scaleEffect(x: 1, y: 1.55, anchor: .center)
             .accessibilityLabel("Confirmed target progress")
@@ -225,7 +213,7 @@ private extension DashboardPlanConfidenceCard {
         HStack(spacing: AppSpacing.sm) {
             Image(systemName: "calendar.badge.clock")
                 .font(.headline.weight(.semibold))
-                .foregroundStyle(Color.ds.accentPrimary)
+                .foregroundStyle(Color.ds.interactionPrimary)
                 .frame(width: 36, height: 36)
                 .background(Color.ds.accentPrimary.opacity(0.1), in: Circle())
                 .accessibilityHidden(true)
@@ -233,7 +221,7 @@ private extension DashboardPlanConfidenceCard {
             VStack(alignment: .leading, spacing: AppSpacing.xxs) {
                 Text("Next planned office day")
                     .font(AppTypography.captionStrong)
-                    .foregroundStyle(Color.ds.accentPrimary)
+                    .foregroundStyle(Color.ds.interactionPrimary)
 
                 Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
                     .font(AppTypography.headline)
@@ -257,9 +245,7 @@ private extension DashboardPlanConfidenceCard {
     }
 
     private var primaryAction: some View {
-        NavigationLink {
-            destination
-        } label: {
+        Button(action: onPrimaryAction) {
             HStack(spacing: AppSpacing.xs) {
                 Text(actionTitle)
                     .font(AppTypography.headline)
@@ -278,20 +264,11 @@ private extension DashboardPlanConfidenceCard {
             .clipShape(
                 RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint(actionHint)
         .accessibilityIdentifier(actionIdentifier)
-    }
-
-    @ViewBuilder
-    private var destination: some View {
-        switch confidence.state {
-        case .needsReview:
-            ReviewQueueView(referenceDate: referenceDate)
-        case .targetMet, .covered, .shortfall, .notReachable:
-            OfficePlanView(displayedMonth: displayedMonth, referenceDate: referenceDate)
-        }
     }
 }
 
@@ -371,7 +348,7 @@ private extension DashboardPlanConfidenceCard {
     private var stateColor: Color {
         switch confidence.state {
         case .targetMet, .covered:
-            Color.ds.accentPrimary
+            Color.ds.success
         case .needsReview, .shortfall:
             Color.ds.warning
         case .notReachable:
@@ -379,7 +356,4 @@ private extension DashboardPlanConfidenceCard {
         }
     }
 
-    private var cardShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: AppRadius.heroCard, style: .continuous)
-    }
 }

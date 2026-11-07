@@ -6,9 +6,6 @@ final class TrackWorkPlanConfidenceUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchEnvironment["TRACKWORK_UI_TESTING"] = "1"
-        app.launchEnvironment["TRACKWORK_UI_TEST_FIXTURE"] = "planCovered"
-        app.launch()
     }
 
     override func tearDownWithError() throws {
@@ -16,41 +13,52 @@ final class TrackWorkPlanConfidenceUITests: XCTestCase {
     }
 
     func testCoveredPlanPresentsConfidenceAndOpensPlanning() {
-        XCTAssertTrue(
-            element(identifier: "dashboard.planConfidence").waitForExistence(timeout: 8)
-        )
-        XCTAssertEqual(
-            element(identifier: "dashboard.planConfidence.status").label,
-            "Plan covers target"
-        )
+        launch(fixture: "planCovered")
 
-        let completed = element(identifier: "dashboard.planConfidence.completed")
-        XCTAssertEqual(valueText(of: completed), "7 of 8 required")
-
-        let remaining = element(identifier: "dashboard.planConfidence.remaining")
-        XCTAssertEqual(valueText(of: remaining), "1")
-
-        let completionDate = element(identifier: "dashboard.planConfidence.completionDate")
-        XCTAssertEqual(completionDate.label, "Completion date")
-        XCTAssertEqual(valueText(of: completionDate), "Thursday 30 July 2026")
-
-        let nextDate = element(identifier: "dashboard.planConfidence.nextDate")
-        XCTAssertEqual(nextDate.label, "Next planned office day")
-        XCTAssertEqual(valueText(of: nextDate), "Thursday 30 July")
-
-        XCTAssertEqual(
-            element(identifier: "dashboard.referenceDate").label,
-            "Wednesday 29 July 2026"
-        )
-        XCTAssertTrue(
-            app.staticTexts["Plans are reminders. Only confirmed attendance counts."].exists
-        )
-        attachScreenshot(named: "Summary Plan Confidence")
+        let plan = element(identifier: "dashboard.officePlan")
+        XCTAssertTrue(plan.label.contains("Plan covers target"), plan.label)
+        XCTAssertTrue(plan.label.contains("Next planned:"), plan.label)
+        XCTAssertTrue(plan.label.contains("30 Jul"), plan.label)
+        attachScreenshot(named: "Today Plan Summary")
 
         let officePlan = reveal(identifier: "dashboard.officePlan")
         XCTAssertTrue(officePlan.isHittable)
         officePlan.tap()
         XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
+    }
+
+    func testCompletePlanOpensPlanningFromShortfallSummary() {
+        launch(fixture: "planShortfall")
+
+
+        let completePlan = reveal(identifier: "dashboard.officePlan")
+        XCTAssertTrue(completePlan.label.contains("Plan is 1 day short"), completePlan.label)
+        XCTAssertTrue(completePlan.isHittable)
+        completePlan.tap()
+
+        XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(element(identifier: "officePlan.screen").exists)
+
+        let plannedDay = reveal(identifier: "officePlan.day.2026-07-30")
+        XCTAssertTrue(plannedDay.isHittable)
+        plannedDay.tap()
+        XCTAssertTrue(waitUntil(timeout: 5) {
+            plannedDay.value as? String == "Planned"
+        })
+
+        app.navigationBars.buttons["TrackWork"].tap()
+        let reviewPlan = reveal(identifier: "dashboard.officePlan")
+        XCTAssertTrue(reviewPlan.label.contains("Plan covers target"), reviewPlan.label)
+        XCTAssertTrue(reviewPlan.isHittable)
+        reviewPlan.tap()
+        XCTAssertTrue(app.navigationBars["Adaptive Month Plan"].waitForExistence(timeout: 5))
+    }
+
+    private func launch(fixture: String) {
+        app.launchEnvironment["TRACKWORK_UI_TESTING"] = "1"
+        app.launchEnvironment["TRACKWORK_UI_TEST_FIXTURE"] = fixture
+        app.launch()
+        app.revealElement("dashboard.officePlan")
     }
 
     private func element(identifier: String) -> XCUIElement {
@@ -59,6 +67,15 @@ final class TrackWorkPlanConfidenceUITests: XCTestCase {
 
     private func valueText(of element: XCUIElement) -> String {
         element.value as? String ?? ""
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval,
+        condition: @escaping () -> Bool
+    ) -> Bool {
+        let predicate = NSPredicate { _, _ in condition() }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: nil)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     private func reveal(identifier: String) -> XCUIElement {

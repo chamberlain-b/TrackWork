@@ -196,7 +196,7 @@ struct ReviewQueueView: View {
 
                 dayLink(for: firstDate) {
                     Label("Leave, notes or exclusions", systemImage: "ellipsis.circle")
-                        .foregroundStyle(Color.ds.accentPrimary)
+                        .foregroundStyle(Color.ds.interactionPrimary)
                 }
                 .accessibilityIdentifier("reviewQueue.moreOptions")
             }
@@ -274,7 +274,7 @@ struct ReviewQueueView: View {
         } label: {
             Label(title, systemImage: systemImage)
                 .frame(maxWidth: .infinity)
-                .foregroundStyle(.black)
+                .foregroundStyle(Color.ds.textInverse)
         }
         .buttonStyle(.borderedProminent)
         .tint(classification == .office ? Color.ds.officeDay : Color.ds.homeDay)
@@ -402,7 +402,7 @@ struct ReviewQueueView: View {
             Label(title, systemImage: systemImage)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 44)
-                .foregroundStyle(isDisabled ? Color.ds.textSecondary : .black)
+                .foregroundStyle(isDisabled ? Color.ds.textSecondary : Color.ds.textInverse)
                 .background(
                     isDisabled ? Color.ds.surfaceSecondary : tint,
                     in: RoundedRectangle(cornerRadius: AppRadius.md, style: .continuous)

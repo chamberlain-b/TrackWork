@@ -18,6 +18,12 @@ struct AutomatedAttendanceEventProcessor {
             .affectedDates(for: event, among: data.locationEvents)
 
         for affectedDate in affectedDates.sorted() {
+            if event.eventKind == .confirmedOutside || event.eventKind == .monitoringStopped,
+               !data.attendanceDays.contains(where: { calendar.startOfDay(for: $0.date) == affectedDate }) {
+                // Keep closing evidence for late event delivery, but it cannot
+                // create an attendance day or establish any duration.
+                continue
+            }
             recalculate(affectedDate, data: &data, modelContext: modelContext)
         }
     }

@@ -2,34 +2,60 @@ import SwiftData
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var referenceDate = AppLaunchConfiguration.dashboardReferenceDate
     @State private var selectedTab: AppTab = .summary
+    @State private var reportingSelection = ReportingPeriodSelection(referenceDate: AppLaunchConfiguration.dashboardReferenceDate)
+    @State private var insightsSection: InsightsSection = .overview
     @State private var appIntentRouter = WorkTrackAppIntentRouter.shared
     @State private var intentPresentation: IntentPresentation?
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            Tab("Summary", systemImage: "house.fill", value: AppTab.summary) {
+            Tab("Home", systemImage: "house.fill", value: AppTab.summary) {
                 DashboardView(
                     onOpenCalendar: { selectedTab = .calendar },
                     onOpenSettings: { selectedTab = .settings },
-                    referenceDate: AppLaunchConfiguration.dashboardReferenceDate
+                    referenceDate: referenceDate,
+                    reportingSelection: reportingSelection,
+                    onOpenInsights: { section in
+                        insightsSection = section
+                        selectedTab = .insights
+                    }
                 )
             }
 
             Tab("Calendar", systemImage: "calendar", value: AppTab.calendar) {
-                MonthCalendarView(referenceDate: AppLaunchConfiguration.dashboardReferenceDate)
+                MonthCalendarView(referenceDate: referenceDate)
             }
 
-            Tab("History", systemImage: "list.bullet.rectangle", value: AppTab.history) {
-                RecordsView(onOpenCalendar: { selectedTab = .calendar })
+            Tab("Insights", systemImage: "chart.bar.xaxis", value: AppTab.insights) {
+                InsightsView(selection: reportingSelection,
+                             referenceDate: referenceDate,
+                             section: $insightsSection)
             }
 
             Tab("Settings", systemImage: "gearshape.fill", value: AppTab.settings) {
                 SettingsView()
             }
         }
+        .tint(Color.ds.interactionPrimary)
         .task {
             handlePendingIntent()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                referenceDate = AppLaunchConfiguration.dashboardReferenceDate
+            }
+        }
+        .task {
+            // iOS posts this for midnight and significant clock/time-zone changes.
+            // Refresh day-based views without a timer or changing the selected report period.
+            for await _ in NotificationCenter.default.notifications(
+                named: UIApplication.significantTimeChangeNotification
+            ).map({ _ in () }) {
+                referenceDate = AppLaunchConfiguration.dashboardReferenceDate
+            }
         }
         .onChange(of: appIntentRouter.pendingHandoff) { _, _ in
             handlePendingIntent()
@@ -65,7 +91,7 @@ struct ContentView: View {
 private enum AppTab: Hashable {
     case summary
     case calendar
-    case history
+    case insights
     case settings
 }
 

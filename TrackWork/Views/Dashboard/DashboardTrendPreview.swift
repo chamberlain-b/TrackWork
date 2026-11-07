@@ -72,14 +72,14 @@ struct DashboardTrendPreview: View {
                     x: .value("Month", point.label),
                     y: .value("Office days", point.completedOfficeDays)
                 )
-                .foregroundStyle(Color.ds.accentPrimary.gradient)
+                .foregroundStyle(Color.ds.officeDay)
             }
 
             LineMark(
                 x: .value("Month", point.label),
                 y: .value("Target", point.requiredOfficeDays)
             )
-            .foregroundStyle(Color.ds.textSecondary)
+            .foregroundStyle(Color.ds.requiredTarget)
             .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
             .symbol(.circle)
         }
@@ -127,10 +127,10 @@ struct DashboardTrendPreview: View {
     private var legend: some View {
         HStack(spacing: AppSpacing.lg) {
             Label("Office days", systemImage: "chart.bar.fill")
-                .foregroundStyle(Color.ds.accentPrimary)
+                .foregroundStyle(Color.ds.officeDay)
 
             Label("Target", systemImage: "line.diagonal")
-                .foregroundStyle(Color.ds.textSecondary)
+                .foregroundStyle(Color.ds.requiredTarget)
         }
         .font(AppTypography.captionStrong)
         .accessibilityHidden(true)

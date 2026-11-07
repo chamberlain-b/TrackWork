@@ -75,99 +75,55 @@ struct ExportView: View {
     }
 
     private var screenContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: AppSpacing.lg) {
-                DSInsightCallout(
-                    icon: "doc.richtext",
-                    message: "PDF and CSV include day-level records. Raw locations are excluded.",
-                    highlightedText: selectedRangeTitle
-                )
-
-                DSCard {
-                    VStack(alignment: .leading, spacing: AppSpacing.md) {
-                        Text("Report")
-                            .font(AppTypography.cardTitle)
-                            .foregroundStyle(Color.ds.textPrimary)
-
-                        CompliancePeriodControls(
-                            selectedPreset: $selectedPeriod,
-                            customStart: $customRangeStart,
-                            customEnd: $customRangeEnd,
-                            accessibilityPrefix: "export"
-                        )
-
-                        Label(selectedRangeTitle, systemImage: "calendar")
-                            .font(AppTypography.caption)
-                            .foregroundStyle(Color.ds.textSecondary)
-                            .accessibilityIdentifier("export.periodRange")
-
-                        if let holidayCoverageWarning {
-                            Label {
-                                Text(holidayCoverageWarning)
-                                    .font(AppTypography.caption)
-                                    .foregroundStyle(Color.ds.textSecondary)
-                            } icon: {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                    .foregroundStyle(Color.ds.warning)
-                            }
-                            .accessibilityIdentifier("export.holidayCoverageWarning")
-                        }
-
-                        Toggle("Include notes", isOn: $includeNotes)
-                            .tint(Color.ds.accentPrimary)
-                            .accessibilityIdentifier("export.includeNotes")
-
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: AppSpacing.sm) {
-                                generatePDFButton
-                                generateCSVButton
-                            }
-
-                            VStack(spacing: AppSpacing.sm) {
-                                generatePDFButton
-                                generateCSVButton
-                            }
-                        }
-
-                    }
-                }
-                .accessibilityIdentifier("export.reportOptions")
-
-                if let generatedFileURL, let generatedFileName, let generatedExportKind {
-                    DSCard {
-                        VStack(alignment: .leading, spacing: AppSpacing.md) {
-                            Label(generatedFileName, systemImage: generatedExportKind.systemImage)
-                                .font(AppTypography.headline)
-                                .foregroundStyle(Color.ds.textPrimary)
-                                .lineLimit(2)
-                                .accessibilityIdentifier("export.generatedFile")
-
-                            ShareLink(item: generatedFileURL) {
-                                Label("Share \(generatedExportKind.label)", systemImage: "square.and.arrow.up")
-                                    .font(AppTypography.headline)
-                                    .foregroundStyle(Color.ds.textInverse)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(minHeight: 50)
-                                    .background(Color.ds.accentPrimary)
-                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.button, style: .continuous))
-                            }
-                            .accessibilityLabel("Share \(generatedExportKind.label) report named \(generatedFileName)")
-                            .accessibilityIdentifier("export.share")
-                        }
-                    }
-                }
-
-                if let generationError {
-                    DSInsightCallout(
-                        icon: "exclamationmark.triangle",
-                        message: generationError,
-                        highlightedText: "Export failed"
-                    )
-                    .accessibilityIdentifier("export.error")
+        Form {
+            Section("Report period") {
+                CompliancePeriodControls(selectedPreset: $selectedPeriod, customStart: $customRangeStart,
+                                         customEnd: $customRangeEnd, accessibilityPrefix: "export")
+                Text(selectedRangeTitle)
+                    .font(AppTypography.caption).foregroundStyle(Color.ds.textSecondary)
+                    .accessibilityIdentifier("export.periodRange")
+                if let holidayCoverageWarning {
+                    Label(holidayCoverageWarning, systemImage: "exclamationmark.triangle")
+                        .font(AppTypography.callout).foregroundStyle(Color.ds.textSecondary)
+                        .accessibilityIdentifier("export.holidayCoverageWarning")
                 }
             }
-            .padding(AppSpacing.lg)
+            Section {
+                Toggle("Include notes", isOn: $includeNotes)
+                    .accessibilityIdentifier("export.includeNotes")
+            } header: {
+                Text("Options")
+            } footer: {
+                Text("Reports contain day-level attendance. Raw locations are excluded.")
+            }
+            Section("Create report") {
+                generatePDFButton
+                generateCSVButton
+            }
+            .accessibilityIdentifier("export.reportOptions")
+            if let generatedFileURL, let generatedFileName, let generatedExportKind {
+                Section("Generated report") {
+                    Label(generatedFileName, systemImage: generatedExportKind.systemImage)
+                        .font(AppTypography.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("export.generatedFile")
+                    ShareLink(item: generatedFileURL) {
+                        Label("Share \(generatedExportKind.label)", systemImage: "square.and.arrow.up")
+                            .frame(minHeight: 44)
+                    }
+                    .accessibilityLabel("Share \(generatedExportKind.label) report named \(generatedFileName)")
+                    .accessibilityIdentifier("export.share")
+                }
+            }
+            if let generationError {
+                Section {
+                    Label(generationError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(Color.ds.critical)
+                        .accessibilityIdentifier("export.error")
+                }
+            }
         }
+        .scrollContentBackground(.hidden)
         .appScreenBackground()
         .navigationTitle("Export")
         .onAppear {

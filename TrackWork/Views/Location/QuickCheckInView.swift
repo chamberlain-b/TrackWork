@@ -111,6 +111,8 @@ struct QuickCheckInView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .appScreenBackground()
         .navigationTitle("Check In")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: locationService.locationUpdateID) { _, _ in

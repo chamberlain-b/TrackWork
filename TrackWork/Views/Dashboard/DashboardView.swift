@@ -9,23 +9,36 @@ struct DashboardView: View {
     @Query(sort: \PlannedOfficeDay.date) private var plannedOfficeDays: [PlannedOfficeDay]
     @Query(sort: \ComplianceRule.createdAt) private var complianceRules: [ComplianceRule]
 
+    @State private var isPresentingOfficePlan = false
+    @State private var isPresentingReviewQueue = false
+    @State private var selectedDay: TodayDaySelection?
+    @State private var insightsSection: InsightsSection = .overview
+
     private let onOpenCalendar: (() -> Void)?
     private let onOpenSettings: (() -> Void)?
     private let referenceDate: Date
+    private let reportingSelection: ReportingPeriodSelection
+    private let onOpenInsights: ((InsightsSection) -> Void)?
     private let calendar = Calendar.dashboardCalendar
     private let periodEvaluator = CompliancePeriodEvaluator()
     private let ruleResolver = ComplianceRuleResolver()
     private let trendCalculator = ComplianceTrendCalculator()
     private let planConfidenceCalculator = OfficePlanConfidenceCalculator()
+    private let todayPresentationBuilder = TodayPresentationBuilder()
+    private let attendancePresentationBuilder = AttendancePeriodPresentationBuilder()
 
     init(
         onOpenCalendar: (() -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
-        referenceDate: Date = .now
+        referenceDate: Date = .now,
+        reportingSelection: ReportingPeriodSelection? = nil,
+        onOpenInsights: ((InsightsSection) -> Void)? = nil
     ) {
         self.onOpenCalendar = onOpenCalendar
         self.onOpenSettings = onOpenSettings
         self.referenceDate = referenceDate
+        self.reportingSelection = reportingSelection ?? ReportingPeriodSelection(referenceDate: referenceDate)
+        self.onOpenInsights = onOpenInsights
     }
 }
 
@@ -215,12 +228,8 @@ private extension DashboardView {
     }
 
     private var hasConfiguredTarget: Bool {
-        switch activeRule.requirementType ?? .fixedMonthlyDays {
-        case .fixedMonthlyDays:
-            return (activeRule.fixedRequiredDays ?? 0) > 0
-        case .percentageOfEligibleDays:
-            return (activeRule.requiredPercentage ?? 0) > 0
-        }
+        // A saved policy, including an explicitly chosen zero target, is configured.
+        !complianceRules.isEmpty
     }
 
     private var dashboardStatus: DashboardStatus {
@@ -265,6 +274,40 @@ private extension DashboardView {
         )
     }
 
+    private var monthlyAttendanceMix: AttendanceMix? {
+        // Match Insights' recorded-workday mix, not the eligible-days compliance percentage.
+        // The report evaluator applies work schedules, leave, holidays, exclusions and mixed-day thresholds.
+        try? attendancePresentationBuilder.make(.init(
+            range: ComplianceDateRange(start: currentMonthStart, end: currentMonthEnd, calendar: calendar),
+            calendar: calendar,
+            referenceDate: referenceDate,
+            rules: complianceRules,
+            attendanceDays: attendanceDays,
+            leaveRecords: leaveRecords,
+            publicHolidays: publicHolidays,
+            customExcludedDays: customExcludedDays
+        )).mix
+    }
+
+    private var todayPresentation: TodayDashboardPresentation {
+        todayPresentationBuilder.makePresentation(
+            TodayPresentationBuilder.Input(
+                referenceDate: referenceDate,
+                calendar: calendar,
+                summary: summary,
+                attendanceDays: attendanceDays,
+                leaveRecords: leaveRecords,
+                publicHolidays: publicHolidays,
+                customExcludedDays: customExcludedDays,
+                plannedOfficeDays: plannedOfficeDays,
+                selectedISOWeekdays: selectedISOWeekdays,
+                jurisdictionId: activeRule.jurisdictionId,
+                targetIsConfigured: hasConfiguredTarget,
+                monthlyAttendanceMix: monthlyAttendanceMix
+            )
+        )
+    }
+
     private var showsPlanConfidence: Bool {
         hasConfiguredTarget
             && summary.adjustedEligibleDays > 0
@@ -292,81 +335,179 @@ private extension DashboardView {
 
 extension DashboardView {
     var body: some View {
-        NavigationStack {
+        let presentation = todayPresentation
+        return NavigationStack {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: AppSpacing.xl) {
+                LazyVStack(alignment: .leading, spacing: AppSpacing.sm) {
                     if complianceRules.isEmpty {
                         DashboardSetupCard(onOpenSettings: onOpenSettings)
                     } else {
-                        if showsPlanConfidence {
-                            Text(
-                                referenceDate.formatted(
-                                    .dateTime.weekday(.wide).day().month(.wide).year()
-                                )
+                        Text(
+                            referenceDate.formatted(
+                                .dateTime.weekday(.wide).day().month(.wide)
                             )
-                            .font(AppTypography.callout)
-                            .foregroundStyle(Color.ds.textSecondary)
-                            .accessibilityIdentifier("dashboard.referenceDate")
+                        )
+                        .font(.body)
+                        .foregroundStyle(Color.ds.textSecondary)
+                        .accessibilityIdentifier("dashboard.referenceDate")
 
-                            DashboardPlanConfidenceCard(
-                                confidence: planConfidence,
-                                displayedMonth: currentMonthStart,
-                                referenceDate: referenceDate
-                            )
-                        } else {
-                            VStack(alignment: .leading, spacing: AppSpacing.cardGap) {
-                                ComplianceHeroCard(
-                                    monthTitle: currentMonthStart.formatted(.dateTime.month(.wide).year()),
-                                    completedOfficeDays: summary.completedOfficeDays,
-                                    businessDaysToDate: summary.eligibleDaysToDate,
-                                    remainingOfficeDays: summary.officeDaysNeeded,
-                                    requiredOfficeDays: summary.requiredOfficeDays,
-                                    reviewCount: reviewDates.count,
-                                    currentCompliance: summary.officeShareToDate,
-                                    status: dashboardStatus,
-                                    targetIsConfigured: hasConfiguredTarget
-                                )
+                        TodayRunwayCard(presentation: presentation)
 
-                                if !reviewDates.isEmpty {
-                                    DashboardReviewAction(
-                                        reviewCount: reviewDates.count
-                                    )
-                                } else if !hasPeriodData {
-                                    DashboardStartAction(onOpenCalendar: onOpenCalendar)
-                                }
-                            }
-                        }
+                        TodayMonthlyShare(presentation: presentation)
 
-                        if hasConfiguredTarget {
-                            DashboardTrendPreview(points: recentMonthlyTrend)
-                        }
+                        Divider()
 
-                        if !showsPlanConfidence {
-                            UpcomingOfficePlanSection(
-                                plannedDates: remainingPlannedOfficeDates,
-                                displayedMonth: currentMonthStart,
-                                referenceDate: referenceDate
-                            )
+                        TodaySummaryCard(
+                            presentation: presentation,
+                            onCorrectToday: { selectedDay = TodayDaySelection(date: today) },
+                            onSelectDay: { selectedDay = TodayDaySelection(date: $0) }
+                        )
+
+                        if !hasConfiguredTarget {
+                            DashboardSetupCard(onOpenSettings: onOpenSettings)
+                        } else if !reviewDates.isEmpty {
+                            reviewAction
+                        } else if showsPlanConfidence {
+                            planAction
                         }
                     }
+
+                    insightsAction
                 }
                 .padding(.horizontal, AppSpacing.screenHorizontal)
-                .padding(.vertical, AppSpacing.lg)
+                .padding(.top, AppSpacing.xxs)
+                .padding(.bottom, AppSpacing.lg)
             }
             .appScreenBackground()
-            .navigationTitle("Summary")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("TrackWork")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        QuickCheckInView()
-                    } label: {
-                        Label("Check In", systemImage: "location.circle")
-                    }
-                    .accessibilityHint("Checks whether you are at a saved home or office location")
-                    .accessibilityIdentifier("dashboard.quickCheckIn")
+                    Button("Settings", systemImage: "gearshape") { onOpenSettings?() }
+                        .accessibilityIdentifier("home.settings")
                 }
             }
+            .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(isPresented: $isPresentingOfficePlan) {
+                OfficePlanView(
+                    displayedMonth: currentMonthStart,
+                    referenceDate: referenceDate
+                )
+            }
+            .navigationDestination(isPresented: $isPresentingReviewQueue) {
+                ReviewQueueView(referenceDate: referenceDate)
+            }
+            .sheet(item: $selectedDay) { selection in
+                DashboardDayEditorSheet(date: selection.date)
+                    .presentationDetents([.large])
+            }
+        }
+    }
+
+    private var reviewAction: some View {
+        Button { isPresentingReviewQueue = true } label: {
+            supportActionLabel(
+                title: reviewDates.count == 1 ? "1 earlier day needs review" : "\(reviewDates.count) earlier days need review",
+                detail: "Review attendance",
+                systemImage: "exclamationmark.circle"
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens days that need review")
+        .accessibilityIdentifier("dashboard.reviewAction")
+    }
+
+    private var planAction: some View {
+        Button(action: openPlanConfidenceDestination) {
+            supportActionLabel(title: planActionTitle, detail: planActionDetail, systemImage: "calendar.badge.clock")
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens office-day planning. Plans are reminders; only confirmed attendance counts.")
+        .accessibilityIdentifier("dashboard.officePlan")
+    }
+
+    private var planActionTitle: String {
+        switch planConfidence.state {
+        case .targetMet: "View office plan"
+        case .covered: "Plan covers target"
+        case .needsReview: "Review attendance"
+        case .shortfall(let count): count == 1 ? "Plan is 1 day short" : "Plan is \(count) days short"
+        case .notReachable: "Target not reachable"
+        }
+    }
+
+    private var planActionDetail: String {
+        if let nextDate = planConfidence.nextPlannedDate {
+            return "Next planned: \(nextDate.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))"
+        }
+        return "Review your office plan"
+    }
+
+    private func supportActionLabel(title: String, detail: String, systemImage: String) -> some View {
+        HStack(spacing: AppSpacing.sm) {
+            Image(systemName: systemImage)
+                .foregroundStyle(Color.ds.interactionPrimary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.ds.textPrimary)
+                Text(detail).font(.caption).foregroundStyle(Color.ds.textSecondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: AppSpacing.xs)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.ds.textTertiary)
+                .accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var insightsAction: some View {
+        if let onOpenInsights {
+            Button {
+                onOpenInsights(.overview)
+            } label: {
+                insightsActionLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.insights")
+        } else {
+            NavigationLink {
+                InsightsView(
+                    selection: reportingSelection,
+                    referenceDate: referenceDate,
+                    section: $insightsSection
+                )
+            } label: {
+                insightsActionLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.insights")
+        }
+    }
+
+    private var insightsActionLabel: some View {
+        HStack(spacing: AppSpacing.sm) {
+            Label("Attendance insights", systemImage: "chart.bar.xaxis")
+                .font(AppTypography.headline)
+            Spacer(minLength: AppSpacing.sm)
+            Image(systemName: "chevron.right")
+                .font(AppTypography.captionStrong)
+                .accessibilityHidden(true)
+        }
+        .foregroundStyle(Color.ds.interactionPrimary)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityHint("Opens period summaries, trends and compliance details")
+    }
+
+    private func openPlanConfidenceDestination() {
+        switch planConfidence.state {
+        case .needsReview:
+            isPresentingReviewQueue = true
+        case .targetMet, .covered, .shortfall, .notReachable:
+            isPresentingOfficePlan = true
         }
     }
 

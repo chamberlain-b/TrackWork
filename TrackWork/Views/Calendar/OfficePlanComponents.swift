@@ -224,7 +224,7 @@ struct OfficePlanStatusMarker: View {
                     .stroke(Color.ds.accentPrimary, lineWidth: 2)
                 Image(systemName: "star.fill")
                     .font(.system(size: size * 0.32, weight: .semibold))
-                    .foregroundStyle(Color.ds.accentPrimary)
+                    .foregroundStyle(Color.ds.interactionPrimary)
             case .leave:
                 Circle()
                     .fill(Color.ds.leaveDay.opacity(0.14))

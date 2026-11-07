@@ -4,10 +4,21 @@ import SwiftData
 enum AppLaunchConfiguration {
     enum UITestFixture: String {
         case adaptivePlan
+        case approvedHome
         case fresh
+        case firstLaunch
+        case existingPolicyUpgrade
+        case phoneHome
+        case phoneOffice
+        case phoneUnrecorded
         case planCovered
+        case planShortfall
         case populated
         case summaryReview
+        case variation3
+        case variation3LeaveHeavy
+        case variation3Overrides
+        case variation3Empty
     }
 
     static var isUITesting: Bool {
@@ -22,17 +33,32 @@ enum AppLaunchConfiguration {
         return UITestFixture(rawValue: value) ?? .fresh
     }
 
+    static var shouldBootstrapHolidays: Bool {
+        // Setup and upgrade tests run production policy/holiday startup against an in-memory store.
+        // Location services continue to use the separate isUITesting guard, avoiding OS side effects.
+        !isUITesting || [.firstLaunch, .existingPolicyUpgrade].contains(uiTestFixture)
+    }
+
     static var dashboardReferenceDate: Date {
         guard isUITesting else {
             return .now
         }
 
         switch uiTestFixture {
-        case .adaptivePlan, .planCovered, .summaryReview:
+        case .adaptivePlan, .planCovered, .planShortfall, .summaryReview, .variation3, .variation3LeaveHeavy, .variation3Overrides, .variation3Empty:
             return fixedUITestReferenceDate
-        case .fresh, .populated:
+        case .approvedHome:
+            return approvedHomeReferenceDate
+        case .phoneHome, .phoneOffice, .phoneUnrecorded:
+            return phoneHomeReferenceDate
+        case .fresh, .firstLaunch, .existingPolicyUpgrade, .populated:
             return .now
         }
+    }
+
+    private static var approvedHomeReferenceDate: Date {
+        let calendar = Calendar.workTrackCalendar
+        return calendar.date(from: DateComponents(year: 2026, month: 10, day: 3, hour: 12)) ?? .now
     }
 
     private static var fixedUITestReferenceDate: Date {
@@ -87,7 +113,13 @@ enum AppModelContainer {
         _ fixture: AppLaunchConfiguration.UITestFixture,
         in modelContext: ModelContext
     ) throws {
-        let fixedRequiredDays = [.adaptivePlan, .planCovered].contains(fixture) ? 8 : 10
+        // Exercise the actual unconfigured setup state without touching an on-disk store.
+        guard fixture != .firstLaunch else { return }
+        if fixture == .existingPolicyUpgrade {
+            try insertExistingPolicyUpgradeFixture(in: modelContext)
+            return
+        }
+        let fixedRequiredDays = [.adaptivePlan, .approvedHome, .planCovered, .planShortfall].contains(fixture) ? 8 : 10
         let rule = ComplianceRule(
             name: "UI Test Rule",
             country: .australia,
@@ -102,14 +134,26 @@ enum AppModelContainer {
         modelContext.insert(rule)
 
         switch fixture {
+        case .firstLaunch, .existingPolicyUpgrade:
+            return
+        case .approvedHome:
+            insertApprovedHomeFixture(in: modelContext)
+            try modelContext.save()
         case .adaptivePlan:
             insertPlanCoveredFixture(in: modelContext)
             insertAdaptivePlanFixture(in: modelContext)
             try modelContext.save()
-        case .fresh:
+        case .fresh, .variation3Empty, .phoneHome, .phoneOffice, .phoneUnrecorded:
+            insertPhoneHomeFixtureIfNeeded(fixture, in: modelContext)
+            try modelContext.save()
+        case .variation3, .variation3LeaveHeavy, .variation3Overrides:
+            insertVariation3Fixture(fixture, in: modelContext)
             try modelContext.save()
         case .planCovered:
             insertPlanCoveredFixture(in: modelContext)
+            try modelContext.save()
+        case .planShortfall:
+            insertPlanShortfallFixture(in: modelContext)
             try modelContext.save()
         case .populated:
             let date = uiTestDate()
@@ -120,6 +164,97 @@ enum AppModelContainer {
             insertSummaryReviewFixture(in: modelContext)
             try modelContext.save()
         }
+    }
+
+    private static func insertExistingPolicyUpgradeFixture(in modelContext: ModelContext) throws {
+        let calendar = Calendar.autoupdatingCurrent
+        let today = calendar.startOfDay(for: AppLaunchConfiguration.dashboardReferenceDate)
+        let originalDate = calendar.date(byAdding: .month, value: -3, to: today) ?? today
+        modelContext.insert(ComplianceRule(
+            name: "Existing NSW policy",
+            country: .australia,
+            jurisdictionId: "AU-NSW",
+            fixedRequiredDays: 7,
+            minimumOfficeMinutes: 240,
+            selectedISOWeekdays: [1, 2, 3, 4],
+            preferredOfficeISOWeekdays: [2],
+            createdAt: originalDate,
+            updatedAt: originalDate
+        ))
+        modelContext.insert(AttendanceDay(
+            date: today,
+            detectedClassification: .home,
+            finalClassification: .office,
+            manualClassification: .office,
+            complianceTreatment: .countsAsOffice,
+            officeMinutes: 420,
+            homeMinutes: 60,
+            note: "Existing attendance note",
+            createdAt: originalDate,
+            updatedAt: originalDate
+        ))
+        try modelContext.save()
+    }
+
+    private static func insertApprovedHomeFixture(in modelContext: ModelContext) {
+        // October has one office day and one home day: 50% recorded-workday share,
+        // independently of one completed day against the eight-day office target.
+        let records: [(month: Int, day: Int, status: AttendanceClassification)] = [
+            (9, 28, .office), (9, 29, .home), (9, 30, .office),
+            (10, 1, .home), (10, 2, .office)
+        ]
+        for record in records {
+            let isOffice = record.status == .office
+            modelContext.insert(AttendanceDay(
+                date: uiTestDate(year: 2026, month: record.month, day: record.day),
+                detectedClassification: record.status,
+                finalClassification: record.status,
+                complianceTreatment: isOffice ? .countsAsOffice : .countsAsHome,
+                officeMinutes: isOffice ? 420 : 0,
+                homeMinutes: isOffice ? 0 : 420
+            ))
+        }
+    }
+
+    private static func insertVariation3Fixture(
+        _ fixture: AppLaunchConfiguration.UITestFixture, in modelContext: ModelContext
+    ) {
+        let calendar = Calendar.workTrackCalendar
+        let referenceDate = AppLaunchConfiguration.dashboardReferenceDate
+        for month in 2...7 {
+            for day in 1...28 {
+                let date = uiTestDate(year: 2026, month: month, day: day)
+                guard !calendar.isDateInWeekend(date), date <= referenceDate else { continue }
+                // Include a zero-office month and short, mixed and dense histories.
+                let status: AttendanceClassification = month == 3 ? .home : day % 5 == 0 ? .mixed : day % 3 == 0 ? .home : .office
+                let isOverride = fixture == .variation3Overrides && day % 2 == 0
+                let officeMinutes = status == .mixed ? 200 : status == .office ? 420 : 0
+                let isLeave = fixture == .variation3LeaveHeavy && day % 3 != 0
+                let isExcluded = isLeave || (month == 7 && [10, 13].contains(day))
+                let record = AttendanceDay(
+                    date: date, detectedClassification: isOverride ? .home : status,
+                    finalClassification: status, manualClassification: isOverride ? status : nil,
+                    complianceTreatment: isExcluded ? .excludedFromRequirement : ComplianceTreatmentResolver.resolve(
+                        classification: status, officeMinutes: officeMinutes, minimumOfficeMinutes: 180
+                    ),
+                    officeMinutes: officeMinutes,
+                    homeMinutes: status == .mixed ? 220 : status == .home ? 420 : 0,
+                    note: isOverride ? "Corrected attendance" : nil
+                )
+                modelContext.insert(record)
+                if isOverride {
+                    modelContext.insert(ManualAdjustment(attendanceDayId: record.id,
+                        adjustedClassification: status, reason: .forgotWorkPass, note: "Corrected attendance"))
+                }
+                if isLeave {
+                    modelContext.insert(LeaveRecord(date: date, leaveType: day % 2 == 0 ? .annualLeave : .sickLeave))
+                }
+            }
+        }
+        modelContext.insert(PublicHoliday(date: uiTestDate(year: 2026, month: 7, day: 10),
+            name: "Fixture holiday", country: .australia, jurisdictionId: "AU-VIC",
+            isRegional: false, sourceName: "Visual test fixture"))
+        modelContext.insert(CustomExcludedDay(date: uiTestDate(year: 2026, month: 7, day: 13)))
     }
 
     private static func insertAdaptivePlanFixture(in modelContext: ModelContext) {
@@ -219,6 +354,25 @@ enum AppModelContainer {
 
         if let plannedDate {
             modelContext.insert(PlannedOfficeDay(date: plannedDate))
+        }
+    }
+
+    private static func insertPlanShortfallFixture(in modelContext: ModelContext) {
+        let pastWorkdays = uiTestPastWorkdays()
+        let completedDates = Set(pastWorkdays.suffix(7))
+
+        for date in pastWorkdays {
+            let isOfficeDay = completedDates.contains(date)
+            modelContext.insert(
+                AttendanceDay(
+                    date: date,
+                    detectedClassification: isOfficeDay ? .office : .home,
+                    finalClassification: isOfficeDay ? .office : .home,
+                    complianceTreatment: isOfficeDay ? .countsAsOffice : .countsAsHome,
+                    officeMinutes: isOfficeDay ? 420 : 0,
+                    homeMinutes: isOfficeDay ? 0 : 420
+                )
+            )
         }
     }
 

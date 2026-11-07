@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CalendarDayPresentation {
-    enum Kind {
+    enum Kind: Equatable {
         case office
         case home
         case mixed

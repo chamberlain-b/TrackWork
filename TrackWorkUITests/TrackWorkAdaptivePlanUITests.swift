@@ -122,7 +122,7 @@ final class TrackWorkAdaptivePlanUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    private func reveal(identifier: String, maxSwipes: Int = 8) -> XCUIElement {
+    private func reveal(identifier: String, maxSwipes: Int = 24) -> XCUIElement {
         let target = element(identifier: identifier)
         for _ in 0...maxSwipes {
             if target.exists && target.isHittable {
@@ -141,16 +141,16 @@ final class TrackWorkAdaptivePlanUITests: XCTestCase {
         return target
     }
 
-    private func revealStatic(identifier: String, maxSwipes: Int = 8) -> XCUIElement {
+    private func revealStatic(identifier: String, maxSwipes: Int = 24) -> XCUIElement {
         let target = element(identifier: identifier)
         for _ in 0...maxSwipes {
-            if target.exists {
+            if target.exists && target.isHittable {
                 return target
             }
             app.swipeUp()
         }
         for _ in 0...maxSwipes {
-            if target.exists {
+            if target.exists && target.isHittable {
                 return target
             }
             app.swipeDown()
